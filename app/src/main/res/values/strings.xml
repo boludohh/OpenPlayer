@@ -1,0 +1,31 @@
+<resources>
+    <string name="app_name">OpenPlayer</string>
+    <string name="main_placeholder">Pantalla principal</string>
+    <string name="main_songs_count">%1$d canciones escaneadas</string>
+    <string name="welcome_title">Bienvenido a</string>
+    <string name="loading_tagline">Más que un reproductor tradicional</string>
+    <string name="start_button">Comenzar</string>
+    <string name="finish_button">Finalizar</string>
+    <string name="back_button">Volver</string>
+    <string name="permissions_title">Conceder permisos</string>
+    <string name="permissions_subtitle">Para utilizar plenamente las funciones de OpenPlayer, necesitamos tu permiso para acceder a ciertas capacidades del dispositivo.</string>
+    <string name="android13_notice_title">Aviso para Android 13+</string>
+    <string name="android13_notice_body">En las versiones más recientes de Android, verás múltiples solicitudes de permiso. Concede acceso a archivos de audio y notificaciones para disfrutar de la mejor experiencia.</string>
+    <string name="permission_library_title">Acceso a la biblioteca musical</string>
+    <string name="permission_library_body">Lee tus archivos de música locales y muéstralos en la aplicación.</string>
+    <string name="permission_bluetooth_title">Conectividad Bluetooth</string>
+    <string name="permission_bluetooth_body">Conéctate a altavoces, auriculares y dispositivos de audio Bluetooth.</string>
+    <string name="permission_notifications_title">Notificaciones</string>
+    <string name="permission_notifications_body">Muestra controles de reproducción e información de la música en las notificaciones.</string>
+    <string name="permission_battery_title">Optimización de batería</string>
+    <string name="permission_battery_body">Evita que el sistema pause la reproducción en segundo plano.</string>
+    <string name="choose_language_title">Elige tu idioma</string>
+    <string name="cd_change_theme">Cambiar tema</string>
+    <string name="cd_playback_engine">Cambiar motor de reproducción</string>
+    <string name="language_es">Español</string>
+    <string name="language_en">Inglés</string>
+    <string name="language_pt_br">Portugués (Brasil)</string>
+    <string name="language_pt">Portugués</string>
+    <string name="language_ar">Árabe</string>
+    <string name="language_fr">Francés</string>
+</resources>

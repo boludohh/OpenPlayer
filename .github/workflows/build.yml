@@ -1,0 +1,97 @@
+name: Build Release
+
+on:
+  push:
+    branches: [ "main" ]
+
+jobs:
+  build-release:
+    name: Build APK (release)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout del repositorio
+        uses: actions/checkout@v7
+
+      - name: Configurar JDK 21
+        uses: actions/setup-java@v6
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+          cache: 'gradle'
+
+      # =====================================================
+      # Librerías BASS desde el repo privado (boludohh/bass-libs)
+      # Debe ir ANTES de compilar: CMake enlaza libbass.so
+      # y Gradle empaca los plugins desde jniLibs/.
+      # =====================================================
+      - name: Clonar y extraer librerías BASS (repo privado)
+        env:
+          BASS_TOKEN: ${{ secrets.BASS_REPO_TOKEN }}
+        run: |
+          set -e
+
+          # Clonar el repo privado (shallow: solo el último commit)
+          git clone --depth 1 "https://x-access-token:${BASS_TOKEN}@github.com/boludohh/bass-libs.git" /tmp/bass-libs
+
+          # Carpetas de destino dentro del proyecto
+          mkdir -p app/src/main/cpp/bass/armeabi-v7a
+          mkdir -p app/src/main/cpp/bass/arm64-v8a
+          mkdir -p app/src/main/jniLibs/armeabi-v7a
+          mkdir -p app/src/main/jniLibs/arm64-v8a
+
+          # Copia con verificación: falla fuerte si falta algún archivo
+          copy_lib() {
+            if [ ! -f "/tmp/bass-libs/$1/$2" ]; then
+              echo "ERROR: no existe /tmp/bass-libs/$1/$2"
+              exit 1
+            fi
+            cp "/tmp/bass-libs/$1/$2" "$3"
+            echo "OK: $3 ($(stat -c%s "$3") bytes)"
+          }
+
+          for ABI in arm64-v8a armeabi-v7a; do
+            # Core: lo enlaza tu CMake (glue openplayeraudio)
+            copy_lib "$ABI" libbass.so "app/src/main/cpp/bass/$ABI/libbass.so"
+
+            # Plugins: Gradle los empaca al APK desde jniLibs
+            for PLUGIN in libbass_aac.so libbass_fx.so libbassflac.so libbassmix.so libbassopus.so; do
+              copy_lib "$ABI" "$PLUGIN" "app/src/main/jniLibs/$ABI/$PLUGIN"
+            done
+          done
+
+          # Limpieza: que no quede rastro del repo privado en el workspace
+          rm -rf /tmp/bass-libs
+          echo "✅ Librerías BASS listas para el build"
+
+      - name: Dar permisos de ejecución al Gradle Wrapper
+        run: chmod +x gradlew
+
+      - name: Reconstruir el keystore desde el Secret
+        run: |
+          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > app/keystore/openplayer-release-key.jks
+
+      - name: Generar keystore.properties desde los Secrets
+        run: |
+          cat <<EOF > app/keystore.properties
+          storeFile=keystore/openplayer-release-key.jks
+          storePassword=${{ secrets.KEYSTORE_STORE_PASSWORD }}
+          keyAlias=${{ secrets.KEYSTORE_KEY_ALIAS }}
+          keyPassword=${{ secrets.KEYSTORE_KEY_PASSWORD }}
+          EOF
+
+      - name: Compilar APK de Release firmado
+        env:
+          GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx9g -XX:+UseParallelGC -Dfile.encoding=UTF-8"
+        run: ./gradlew assembleRelease --stacktrace
+
+      - name: Eliminar el keystore temporal
+        if: always()
+        run: rm -f app/keystore/openplayer-release-key.jks app/keystore.properties
+
+      - name: Subir APK como Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: apk-release
+          path: app/build/outputs/apk/release/*.apk
+          retention-days: 30

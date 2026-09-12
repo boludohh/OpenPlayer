@@ -1,0 +1,10 @@
+# Keystore
+*.jks
+
+# Propiedades del keystore
+app/keystore.properties
+
+# Archivos de sistema / IDE
+.DS_Store
+*.iml
+.idea/

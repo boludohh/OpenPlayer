@@ -1,0 +1,20 @@
+<resources>
+    <style name="Theme.ComposeEmptyActivity" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:enforceStatusBarContrast">false</item>
+        <item name="android:enforceNavigationBarContrast">false</item>
+        <item name="android:forceDarkAllowed">false</item>
+    </style>
+
+    <!-- Variante API 29+ del tema de splash.
+         Mantiene las mismas reglas de contraste/forceDark que el tema base
+         para que el sistema no aplique scrims ni force dark sobre el
+         windowBackground blanco durante el arranque. -->
+    <style name="Theme.Splash" parent="Theme.ComposeEmptyActivity">
+        <item name="android:windowBackground">#FFFFFFFF</item>
+        <item name="android:enforceStatusBarContrast">false</item>
+        <item name="android:enforceNavigationBarContrast">false</item>
+        <item name="android:forceDarkAllowed">false</item>
+    </style>
+</resources>

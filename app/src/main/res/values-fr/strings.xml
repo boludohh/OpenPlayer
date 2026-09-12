@@ -1,0 +1,30 @@
+<resources>
+    <string name="main_placeholder">Écran principal</string>
+    <string name="main_songs_count">%1$d chansons analysées</string>
+    <string name="welcome_title">Bienvenue sur</string>
+    <string name="loading_tagline">Bien plus qu\'un lecteur traditionnel</string>
+    <string name="start_button">Commencer</string>
+    <string name="finish_button">Terminer</string>
+    <string name="back_button">Retour</string>
+    <string name="permissions_title">Accorder les autorisations</string>
+    <string name="permissions_subtitle">Pour profiter pleinement des fonctionnalités d\'OpenPlayer, nous avons besoin de votre autorisation pour accéder à certaines capacités de l\'appareil.</string>
+    <string name="android13_notice_title">Avis Android 13+</string>
+    <string name="android13_notice_body">Sur les versions récentes d\'Android, plusieurs demandes d\'autorisation s\'afficheront. Accordez l\'accès aux fichiers audio et aux notifications pour profiter de la meilleure expérience.</string>
+    <string name="permission_library_title">Accès à la bibliothèque musicale</string>
+    <string name="permission_library_body">Lit vos fichiers musicaux locaux et les affiche dans l\'application.</string>
+    <string name="permission_bluetooth_title">Connectivité Bluetooth</string>
+    <string name="permission_bluetooth_body">Connectez-vous à des enceintes, casques et appareils audio Bluetooth.</string>
+    <string name="permission_notifications_title">Notifications</string>
+    <string name="permission_notifications_body">Affiche les contrôles de lecture et les informations de la musique dans les notifications.</string>
+    <string name="permission_battery_title">Optimisation de la batterie</string>
+    <string name="permission_battery_body">Empêche le système de mettre la lecture en pause en arrière-plan.</string>
+    <string name="choose_language_title">Choisissez votre langue</string>
+    <string name="cd_change_theme">Changer de thème</string>
+    <string name="cd_playback_engine">Changer de moteur de lecture</string>
+    <string name="language_es">Espagnol</string>
+    <string name="language_en">Anglais</string>
+    <string name="language_pt_br">Portugais (Brésil)</string>
+    <string name="language_pt">Portugais</string>
+    <string name="language_ar">Arabe</string>
+    <string name="language_fr">Français</string>
+</resources>

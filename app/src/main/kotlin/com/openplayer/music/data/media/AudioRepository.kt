@@ -1,0 +1,381 @@
+package com.openplayer.music.data.media
+
+import android.content.ContentResolver
+import android.content.Context
+import android.database.ContentObserver
+import android.net.Uri
+import android.os.Handler
+import android.os.Looper
+import android.os.Process
+import android.provider.MediaStore
+import com.openplayer.music.data.AppPreferences
+import com.openplayer.music.data.db.AppDatabase
+import com.openplayer.music.data.db.SongEntity
+import com.openplayer.music.native.NativeBridge
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.launch
+import java.io.File
+
+/**
+ * Orquesta el escaneo y sincronización de la biblioteca musical.
+ *
+ * ## Fuentes de datos
+ * - **MediaStore**: descubre archivos de audio del dispositivo
+ *   (`IS_MUSIC != 0`). Es la fuente primaria de `id`, `path`,
+ *   `duration` y valores de respaldo para `title`/`artist`.
+ * - **AudioFormatParser**: validación de formato por lectura directa
+ *   de bytes del header (Kotlin puro, sin dependencias nativas).
+ * - **NativeBridge / TagLib 2.3.1**: extracción estricta de
+ *   metadatos. Tiene prioridad sobre MediaStore para `title` y
+ *   `artist`; si no devuelve valor, se usa el de MediaStore.
+ * - **CoverRepository**: extracción y guardado de la portada
+ *   embebida en el mismo pipeline, junto con los metadatos.
+ * - **Room**: caché reconstruible (ver AppDatabase).
+ * - **DataStore (AppPreferences)**: timestamp del último escaneo
+ *   (`last_scan_seconds`), usado por el mecanismo incremental.
+ *
+ * ## Tres mecanismos de sincronización
+ *
+ * 1. **Escaneo completo inicial** (`syncIfNeeded`): si Room está
+ *    vacío (primera apertura o después de reinstalar), se corre
+ *    `observeSongBatches()` una sola vez. Al terminar se guarda
+ *    el timestamp actual en DataStore.
+ *
+ * 2. **Re-escaneo incremental al volver a primer plano**
+ *    (`incrementalScan`): lee el timestamp guardado y consulta
+ *    MediaStore filtrando por `DATE_ADDED > ts` (nuevos archivos)
+ *    **y** `DATE_MODIFIED > ts` (archivos ya indexados cuyas
+ *    etiquetas cambiaron). Después de procesar, actualiza el
+ *    timestamp al momento actual.
+ *
+ * 3. **ContentObserver con debounce de 1.5s**: se registra sobre
+ *    `MediaStore.Audio.Media.EXTERNAL_CONTENT_URI`. Ante una
+ *    ráfaga de avisos (por ejemplo, descarga de varias canciones
+ *    seguidas) se cancela y reprograma un re-escaneo incremental,
+ *    de modo que se ejecuta **una sola vez** al terminar la
+ *    ráfaga. Cubre el caso de música agregada con la app abierta.
+ *
+ * ## Detección de eliminaciones externas
+ *
+ * Al final de cada sync, se obtiene un snapshot de la tabla y se
+ * borran en batch las filas cuyo `path` ya no existe en disco
+ * (`File(path).exists() == false`). **Junto con cada fila se
+ * elimina también su archivo de portada** en `CoverRepository`,
+ * de modo que nunca quedan imágenes huérfanas.
+ *
+ * ## Pipeline por archivo (orden estricto)
+ *
+ * 1. Filtro fantasma: path nulo o `File(path)` inexistente.
+ * 2. Duración mínima: 30.000 ms (descarta tonos y notificaciones).
+ * 3. Validación de formato: `AudioFormatParser.isValid`.
+ * 4. Extracción TagLib: `NativeBridge.extractMetadata`.
+ *    - `title` y `artist` de TagLib si están presentes, si no,
+ *      fallback a los valores obtenidos de MediaStore.
+ * 5. Extracción y guardado de portada (idempotente):
+ *    `CoverRepository.extractAndSaveCover(path)`. Si el archivo
+ *    ya existe en disco, no hace nada.
+ * 6. Construcción de [SongEntity].
+ * 7. Emisión en lotes de 300 (no acumular toda la biblioteca en
+ *    memoria antes de insertar).
+ *
+ * Todo el trabajo corre con prioridad BACKGROUND y en
+ * `Dispatchers.IO`.
+ */
+class AudioRepository(
+    private val context: Context,
+    private val database: AppDatabase,
+    private val preferences: AppPreferences
+) {
+
+    /** Lista reactiva de canciones ordenadas por título (dominio). */
+    val songs: Flow<List<com.openplayer.music.data.model.Song>> =
+        database.songDao().getAll().map { entities -> entities.map { it.toSong() } }
+
+    private val songDao = database.songDao()
+    private val contentResolver: ContentResolver = context.contentResolver
+    private val mainHandler = Handler(Looper.getMainLooper())
+
+    /** Scope dedicado al observer y tareas de fondo de larga vida. */
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    /** Job del debounce del ContentObserver (cancelable). */
+    private var debounceJob: Job? = null
+
+    /** Debounce en milisegundos antes de reaccionar a un cambio de MediaStore. */
+    private val debounceMillis = 1500L
+
+    /** Duración mínima aceptada para una canción (descarta tonos/notifs). */
+    private val minDurationMs = 30_000L
+
+    /** Tamaño de cada lote de inserción en Room. */
+    private val batchSize = 300
+
+    /** Repositorio de portadas: extracción inline y limpieza. */
+    private val coverRepository = CoverRepository(context)
+
+    // =========================================================================
+    // API pública
+    // =========================================================================
+
+    /**
+     * Ejecuta un escaneo completo si Room está vacío. Es la
+     * llamada típica desde la Splash (LoadingScreen) en la
+     * primera apertura.
+     *
+     * @return Flow que emite lotes de [SongEntity] mientras se
+     *         van insertando; útil para mostrar progreso. Se
+     *         completa cuando termina el escaneo.
+     */
+    fun syncIfNeeded(): Flow<List<SongEntity>> = flow {
+        val currentCount = songDao.count()
+        if (currentCount == 0) {
+            observeSongBatches(isFull = true).collect { batch ->
+                songDao.insertBatch(batch)
+                emit(batch)
+            }
+            preferences.setLastScanSeconds(epochSecondsNow())
+            cleanDeletedFiles()
+        }
+    }.flowOn(Dispatchers.IO)
+
+    /**
+     * Escaneo incremental: nuevos archivos (`DATE_ADDED`) y
+     * modificados (`DATE_MODIFIED`) desde el último timestamp.
+     * Se llama al volver a primer plano y es el objetivo del
+     * ContentObserver con debounce.
+     */
+    suspend fun incrementalScan() {
+        val lastScan = preferences.lastScanSeconds.first() ?: 0L
+        observeSongBatches(isFull = false, sinceSeconds = lastScan).collect { batch ->
+            songDao.insertBatch(batch)
+        }
+        preferences.setLastScanSeconds(epochSecondsNow())
+        cleanDeletedFiles()
+    }
+
+    /**
+     * Registra el ContentObserver sobre MediaStore. Llamar desde
+     * el onCreate de la Activity principal (o donde se desee
+     * detectar cambios en tiempo real).
+     */
+    fun registerContentObserver() {
+        contentResolver.registerContentObserver(
+            MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
+            true,
+            mediaStoreObserver
+        )
+    }
+
+    /**
+     * Desregistra el ContentObserver. Llamar desde onDestroy de
+     * la Activity principal.
+     */
+    fun unregisterContentObserver() {
+        debounceJob?.cancel()
+        contentResolver.unregisterContentObserver(mediaStoreObserver)
+    }
+
+    // =========================================================================
+    // Núcleo del escaneo
+    // =========================================================================
+
+    /**
+     * Flow de lotes de canciones obtenidas de MediaStore y
+     * validadas/enriquecidas por AudioFormatParser, TagLib y
+     * extracción de portada.
+     *
+     * @param isFull true = escaneo completo (sin filtros de tiempo).
+     * @param sinceSeconds timestamp epoch en segundos; sólo se
+     *        usan si [isFull] es false.
+     */
+    private fun observeSongBatches(
+        isFull: Boolean,
+        sinceSeconds: Long = 0L
+    ): Flow<List<SongEntity>> = flow {
+        Process.setThreadPriority(Process.THREAD_PRIORITY_BACKGROUND)
+
+        val (selection, selectionArgs) = if (isFull) {
+            "${MediaStore.Audio.Media.IS_MUSIC} != 0" to emptyArray<String>()
+        } else {
+            ("${MediaStore.Audio.Media.IS_MUSIC} != 0 AND " +
+                "(${MediaStore.Audio.Media.DATE_ADDED} > ? OR " +
+                "${MediaStore.Audio.Media.DATE_MODIFIED} > ?)") to
+                arrayOf(sinceSeconds.toString(), sinceSeconds.toString())
+        }
+
+        val projection = arrayOf(
+            MediaStore.Audio.Media._ID,
+            MediaStore.Audio.Media.TITLE,
+            MediaStore.Audio.Media.ARTIST,
+            MediaStore.Audio.Media.ALBUM,
+            MediaStore.Audio.Media.DURATION,
+            MediaStore.Audio.Media.DATA,
+            MediaStore.Audio.Media.DISPLAY_NAME
+        )
+
+        val batch = ArrayList<SongEntity>(batchSize)
+
+        contentResolver.query(
+            MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
+            projection,
+            selection,
+            selectionArgs,
+            "${MediaStore.Audio.Media.DISPLAY_NAME} ASC"
+        )?.use { cursor ->
+            val idIndex = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media._ID)
+            val titleIndex = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.TITLE)
+            val artistIndex = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ARTIST)
+            val albumIndex = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM)
+            val durationIndex = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DURATION)
+            val dataIndex = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DATA)
+            val displayNameIndex =
+                cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DISPLAY_NAME)
+
+            while (cursor.moveToNext()) {
+                val id = cursor.getLong(idIndex)
+                val path = cursor.getString(dataIndex).orEmpty()
+                val mediaStoreTitle = cursor.getString(titleIndex).orEmpty()
+                    .ifEmpty { cursor.getString(displayNameIndex).orEmpty() }
+                val mediaStoreArtist = cursor.getString(artistIndex).orEmpty()
+                val mediaStoreAlbum = cursor.getString(albumIndex).orEmpty()
+                val durationMs = cursor.getLong(durationIndex)
+
+                // 1. Filtro fantasma
+                if (path.isEmpty() || !File(path).exists()) continue
+
+                // 2. Duración mínima
+                if (durationMs < minDurationMs) continue
+
+                // 3. Validación de formato con AudioFormatParser (Kotlin puro)
+                val formatOk = AudioFormatParser.isValid(path)
+                if (!formatOk) continue
+
+                // 4. Extracción TagLib (con fallback a MediaStore)
+                val metadata = runCatching { NativeBridge.extractMetadata(path) }
+                    .getOrDefault(emptyMap())
+
+                val title = metadata["title"]?.takeIf { it.isNotBlank() } ?: mediaStoreTitle
+                val artist = metadata["artist"]?.takeIf { it.isNotBlank() } ?: mediaStoreArtist
+
+                // 5. Extracción y guardado de portada inline (idempotente).
+                //    Si el archivo ya existe en disco, extractAndSaveCover
+                //    retorna sin hacer I/O pesado. Se ejecuta en el mismo
+                //    hilo BACKGROUND del escaneo.
+                coverRepository.extractAndSaveCover(path)
+
+                // 6. Construcción de SongEntity
+                val entity = SongEntity(
+                    id = id,
+                    title = title,
+                    artist = artist,
+                    album = metadata["album"]?.takeIf { it.isNotBlank() }
+                        ?: mediaStoreAlbum.takeIf { it.isNotBlank() },
+                    albumArtist = metadata["albumArtist"]?.takeIf { it.isNotBlank() },
+                    genre = metadata["genre"]?.takeIf { it.isNotBlank() },
+                    composer = metadata["composer"]?.takeIf { it.isNotBlank() },
+                    lyrics = metadata["lyrics"]?.takeIf { it.isNotBlank() },
+                    trackNumber = metadata["trackNumber"]?.parseSlashFirst(),
+                    discNumber = metadata["discNumber"]?.parseSlashFirst(),
+                    year = metadata["year"]?.parseYear(),
+                    duration = durationMs,
+                    path = path,
+                    bitrate = metadata["bitrate"]?.toIntOrNull(),
+                    sampleRate = metadata["sampleRate"]?.toIntOrNull(),
+                    channels = metadata["channels"]?.toIntOrNull()
+                )
+
+                batch += entity
+
+                // 7. Emitir lote cuando alcanza el tamaño configurado
+                if (batch.size >= batchSize) {
+                    emit(ArrayList(batch))
+                    batch.clear()
+                }
+            }
+
+            // Emitir el último lote si quedó algo pendiente
+            if (batch.isNotEmpty()) {
+                emit(ArrayList(batch))
+                batch.clear()
+            }
+        }
+    }.flowOn(Dispatchers.IO)
+
+    /**
+     * Borra de Room las filas cuyo path ya no existe en disco y
+     * elimina también sus archivos de portada asociados. Detecta
+     * canciones eliminadas por otra app o por el usuario desde un
+     * explorador de archivos.
+     */
+    private suspend fun cleanDeletedFiles() {
+        val snapshot = songDao.getAll().first()
+        val toDelete = snapshot.filter {
+            it.path.isEmpty() || !File(it.path).exists()
+        }
+        if (toDelete.isEmpty()) return
+
+        // Borrar portadas asociadas antes de las filas
+        toDelete.forEach { coverRepository.deleteCover(it.path) }
+
+        // Borrar filas en chunks para no exceder límites de SQLite
+        toDelete.map { it.id }.chunked(500).forEach { chunk ->
+            songDao.deleteByIds(chunk)
+        }
+    }
+
+    // =========================================================================
+    // ContentObserver con debounce
+    // =========================================================================
+
+    private val mediaStoreObserver = object : ContentObserver(mainHandler) {
+        override fun onChange(selfChange: Boolean) {
+            onChange(selfChange, null)
+        }
+
+        override fun onChange(selfChange: Boolean, uri: Uri?) {
+            // Cancela cualquier re-escaneo previamente programado y
+            // programa uno nuevo dentro de 1.5s. Así una ráfaga de
+            // cambios (ej: descarga de varias canciones) se resuelve
+            // con un único escaneo incremental al final.
+            debounceJob?.cancel()
+            debounceJob = scope.launch {
+                delay(debounceMillis)
+                runCatching { incrementalScan() }
+            }
+        }
+    }
+
+    // =========================================================================
+    // Utilidades
+    // =========================================================================
+
+    private fun epochSecondsNow(): Long = System.currentTimeMillis() / 1000L
+}
+
+/**
+ * Extrae la parte numérica antes de la "/" en strings tipo "3/12"
+ * (TRACKNUMBER o DISCNUMBER). Si no hay "/", parsea el string
+ * completo. Retorna null si no es parseable.
+ */
+private fun String.parseSlashFirst(): Int? =
+    substringBefore("/").trim().toIntOrNull()
+
+/**
+ * Extrae los primeros 4 dígitos válidos del string como año,
+ * restringido al rango 1900-2100.
+ */
+private fun String.parseYear(): Int? {
+    val digits = filter { it.isDigit() }
+    if (digits.length < 4) return null
+    val year = digits.take(4).toIntOrNull() ?: return null
+    return if (year in 1900..2100) year else null
+}

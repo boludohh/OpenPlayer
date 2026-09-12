@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Ícono pequeño para la notificación de reproducción de NokliPlayer.
+  
+  Media3 busca automáticamente este recurso (media3_notification_small_icon)
+  para usarlo como ícono pequeño en la notificación del sistema.
+  
+  Tamaño: 24dp x 24dp (estándar de Android para íconos de notificación).
+  El color del ícono se adapta automáticamente al color dominante de la
+  portada del álbum: Android tiñe el stroke blanco según el fondo de la
+  notificación (claro en portadas oscuras, oscuro en portadas claras).
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M11.058 4c-4.135.457-7.351 4.162-7.351 8.73a8.27 8.27 0 0 0 13.784 6.164c4.01-3.588 1.378-10.55-2.757-10.55h-1.228A4.285 4.285 0 0 0 9.22 12.63a2.857 2.857 0 0 0 2.856 2.856h.13a2.986 2.986 0 0 0 2.986-2.986V5.796a1.796 1.796 0 0 1 3.29-.996l.386.578"
+        android:strokeWidth="3"
+        android:strokeColor="#ffffff"
+        android:strokeLineCap="round" />
+</vector>

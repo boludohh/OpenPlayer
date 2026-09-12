@@ -1,0 +1,30 @@
+<resources>
+    <string name="main_placeholder">Tela principal</string>
+    <string name="main_songs_count">%1$d músicas escaneadas</string>
+    <string name="welcome_title">Bem-vindo ao</string>
+    <string name="loading_tagline">Mais do que um player tradicional</string>
+    <string name="start_button">Começar</string>
+    <string name="finish_button">Concluir</string>
+    <string name="back_button">Voltar</string>
+    <string name="permissions_title">Conceder permissões</string>
+    <string name="permissions_subtitle">Para usar totalmente os recursos do OpenPlayer, precisamos da sua permissão para acessar certos recursos do dispositivo.</string>
+    <string name="android13_notice_title">Aviso para Android 13+</string>
+    <string name="android13_notice_body">Nas versões mais recentes do Android, você verá várias solicitações de permissão. Conceda acesso aos arquivos de áudio e notificações para aproveitar a melhor experiencia.</string>
+    <string name="permission_library_title">Acesso à biblioteca musical</string>
+    <string name="permission_library_body">Lê seus arquivos de música locais e os exibe no aplicativo.</string>
+    <string name="permission_bluetooth_title">Conectividade Bluetooth</string>
+    <string name="permission_bluetooth_body">Conecte-se a alto-falantes, fones de ouvido e dispositivos de áudio Bluetooth.</string>
+    <string name="permission_notifications_title">Notificações</string>
+    <string name="permission_notifications_body">Mostra os controles de reprodução e informações da música nas notificações.</string>
+    <string name="permission_battery_title">Otimização de bateria</string>
+    <string name="permission_battery_body">Impede que o sistema pause a reprodução em segundo plano.</string>
+    <string name="choose_language_title">Escolha seu idioma</string>
+    <string name="cd_change_theme">Mudar tema</string>
+    <string name="cd_playback_engine">Alterar motor de reprodução</string>
+    <string name="language_es">Espanhol</string>
+    <string name="language_en">Inglês</string>
+    <string name="language_pt_br">Português (Brasil)</string>
+    <string name="language_pt">Português</string>
+    <string name="language_ar">Árabe</string>
+    <string name="language_fr">Francês</string>
+</resources>

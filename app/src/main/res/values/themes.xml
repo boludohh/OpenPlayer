@@ -1,0 +1,14 @@
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <style name="Theme.ComposeEmptyActivity" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+    </style>
+
+    <!-- Tema exclusivo para SplashActivity.
+         windowBackground blanco (#FFFFFF) coincide con LightBackground,
+         eliminando el parpadeo blanco antes de que onCreate() esté listo.
+         En modo oscuro/AMOLED se usa la variante de values-night/. -->
+    <style name="Theme.Splash" parent="Theme.ComposeEmptyActivity">
+        <item name="android:windowBackground">#FFFFFFFF</item>
+    </style>
+</resources>

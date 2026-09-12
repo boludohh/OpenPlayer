@@ -1,0 +1,30 @@
+<resources>
+    <string name="main_placeholder">الشاشة الرئيسية</string>
+    <string name="main_songs_count">%1$d أغاني ممسوحة ضوئياً</string>
+    <string name="welcome_title">مرحبًا بك في</string>
+    <string name="loading_tagline">أكثر من مشغل تقليدي</string>
+    <string name="start_button">ابدأ</string>
+    <string name="finish_button">إنهاء</string>
+    <string name="back_button">رجوع</string>
+    <string name="permissions_title">منح الأذونات</string>
+    <string name="permissions_subtitle">لاستخدام جميع ميزات OpenPlayer، نحتاج إلى إذنك للوصول إلى بعض إمكانيات الجهاز.</string>
+    <string name="android13_notice_title">تنبيه لأندرويد 13+</string>
+    <string name="android13_notice_body">في الإصدارات الأحدث من أندرويد، سترى عدة طلبات أذونات. امنح الوصول إلى ملفات الصوت والإشعارات للاستمتاع بأفضل تجربة.</string>
+    <string name="permission_library_title">الوصول إلى مكتبة الموسيقى</string>
+    <string name="permission_library_body">يقرأ ملفات الموسيقى المحلية ويعرضها في التطبيق.</string>
+    <string name="permission_bluetooth_title">اتصال بلوتوث</string>
+    <string name="permission_bluetooth_body">اتصل بمكبرات الصوت وسماعات الرأس وأجهزة الصوت عبر بلوتوث.</string>
+    <string name="permission_notifications_title">الإشعارات</string>
+    <string name="permission_notifications_body">يعرض عناصر تحكم التشغيل ومعلومات الموسيقى في الإشعارات.</string>
+    <string name="permission_battery_title">تحسين البطارية</string>
+    <string name="permission_battery_body">يمنع النظام من إيقاف التشغيل مؤقتًا في الخلفية.</string>
+    <string name="choose_language_title">اختر لغتك</string>
+    <string name="cd_change_theme">تغيير السمة</string>
+    <string name="cd_playback_engine">تبديل محرك التشغيل</string>
+    <string name="language_es">الإسبانية</string>
+    <string name="language_en">الإنجليزية</string>
+    <string name="language_pt_br">البرتغالية (البرازيل)</string>
+    <string name="language_pt">البرتغالية</string>
+    <string name="language_ar">العربية</string>
+    <string name="language_fr">الفرنسية</string>
+</resources>
