@@ -24,7 +24,7 @@
 
         <!-- Fondo rojo con esquinas redondeadas -->
         <path
-            android:fillColor="#FFC1121F"
+            android:fillColor="#1545bf"
             android:pathData="M5.5,0L18.5,0A5.5,5.5 0,0 1,24 5.5L24,18.5A5.5,5.5 0,0 1,18.5 24L5.5,24A5.5,5.5 0,0 1,0 18.5L0,5.5A5.5,5.5 0,0 1,5.5 0z"/>
 
         <!-- Símbolo blanco, escalado 0.8817x desde el centro -->
