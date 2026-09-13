@@ -562,7 +562,7 @@ class BassPlayerAdapter(
     private fun onTrackEnded() {
     val nextIndex = currentIndex + 1
 
-    if (nextIndex < currentPlayList.size) {
+    if (nextIndex < currentPlaylist.size) {
         currentIndex = nextIndex
         releaseCurrentStream()
         createStreamForCurrentItem()
@@ -595,5 +595,6 @@ companion object {
 
     /** Sample rate por defecto para inicializar BASS. */
     private const val DEFAULT_SAMPLE_RATE = 44100
+}
 }
         
