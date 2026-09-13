@@ -3,6 +3,7 @@ package com.openplayer.music.ui.components
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
@@ -196,7 +197,7 @@ private fun AnimatedIcon(
     Box(
         modifier = Modifier
             .size(32.dp)
-            .then(Modifier.clickable(onClick = onClick)),
+            .clickable(onClick = onClick),
         contentAlignment = Alignment.Center
     ) {
         // Versión outline (siempre visible en el fondo)
@@ -242,7 +243,7 @@ private fun AnimatedPlaylistIcon(
     Box(
         modifier = Modifier
             .size(32.dp)
-            .then(Modifier.clickable(onClick = onClick)),
+            .clickable(onClick = onClick),
         contentAlignment = Alignment.Center
     ) {
         // Nota musical con relleno animado
@@ -293,6 +294,3 @@ private class BottomToTopClipShape(private val progress: Float) : Shape {
         return Outline.Rectangle(rect)
     }
 }
-
-private fun Modifier.clickable(onClick: () -> Unit): Modifier =
-    this.then(androidx.compose.foundation.clickable(onClick = onClick))
