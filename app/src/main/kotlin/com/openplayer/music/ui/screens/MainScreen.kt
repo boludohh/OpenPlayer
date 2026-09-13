@@ -57,6 +57,11 @@ import kotlinx.coroutines.withContext
  * En pasos futuros aquí se integrará la navegación entre pestañas
  * (Home, Songs, Albums, Playlists) y los componentes globales,
  * y se eliminará la lista temporal.
+ *
+ * **Reproducción por mediaId**: la reproducción busca la canción por
+ * su mediaId en la playlist del controller, lo que funciona correctamente
+ * sin importar el orden de la lista o cuándo se agregaron canciones.
+ * El servicio mantiene la playlist sincronizada automáticamente.
  */
 @Composable
 fun MainScreen(audioRepository: AudioRepository) {
@@ -85,7 +90,7 @@ fun MainScreen(audioRepository: AudioRepository) {
         }
     }
 
-    // ===== Lista de MediaItems construida UNA sola vez =====
+    // ===== Lista de MediaItems construida localmente como fallback =====
     var mediaItems by remember { mutableStateOf<List<androidx.media3.common.MediaItem>>(emptyList()) }
 
     // Reconstruir MediaItems cuando cambie la lista de canciones
@@ -122,18 +127,27 @@ fun MainScreen(audioRepository: AudioRepository) {
                 itemsIndexed(songs) { index, song ->
                     TempSongRow(song = song) {
                         val current = controller ?: return@TempSongRow
-                        if (mediaItems.isEmpty()) return@TempSongRow
+                        val targetMediaId = song.id.toString()
 
                         coroutineScope.launch {
-                            // Sin ensureCover: toda la extracción ya se hizo
-                            // durante el escaneo. El tap es solo seekTo/play.
-                            if (current.mediaItemCount == 0 || current.currentMediaItem == null) {
-                                current.setMediaItems(mediaItems, index, 0L)
-                                current.prepare()
-                            } else {
-                                current.seekTo(index, 0L)
+                            // Buscar el índice de la canción en la playlist del controller por mediaId
+                            val index = (0 until current.mediaItemCount).indexOfFirst {
+                                current.getMediaItemAt(it).mediaId == targetMediaId
                             }
-                            current.play()
+
+                            if (index >= 0) {
+                                // La canción está en la playlist del servicio, solo hacer seek
+                                current.seekTo(index, 0L)
+                                current.play()
+                            } else if (mediaItems.isNotEmpty()) {
+                                // La playlist está vacía o desactualizada (primera vez o cambio reciente)
+                                // Cargar toda la playlist y reproducir esta canción
+                                val startIndex = mediaItems.indexOfFirst { it.mediaId == targetMediaId }
+                                    .coerceAtLeast(0)
+                                current.setMediaItems(mediaItems, startIndex, 0L)
+                                current.prepare()
+                                current.play()
+                            }
                         }
                     }
                 }

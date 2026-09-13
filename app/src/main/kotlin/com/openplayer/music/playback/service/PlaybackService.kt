@@ -16,7 +16,16 @@ import androidx.media3.session.MediaLibraryService
 import androidx.media3.session.MediaLibraryService.MediaLibrarySession
 import androidx.media3.session.MediaSession
 import com.openplayer.music.MainActivity
+import com.openplayer.music.OpenPlayerApplication
+import com.openplayer.music.data.media.CoverRepository
 import com.openplayer.music.playback.engine.BassPlayerAdapter
+import com.openplayer.music.playback.toMediaItem
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
 
 /**
  * Servicio de reproducción en segundo plano de OpenPlayer.
@@ -37,6 +46,10 @@ import com.openplayer.music.playback.engine.BassPlayerAdapter
  * - Decidir si el servicio sobrevive en onTaskRemoved: si el usuario
  *   cierra la app mientras suena música, la reproducción continúa;
  *   si está pausada, el servicio se detiene.
+ * - **Sincronización reactiva de playlist**: se suscribe al Flow de
+ *   canciones de AudioRepository y actualiza automáticamente la playlist
+ *   del adapter cuando la biblioteca cambia (canciones agregadas,
+ *   eliminadas o modificadas).
  *
  * Nota de API (Media3 1.11.0): [MediaLibrarySession] es una clase
  * anidada dentro de [MediaLibraryService], por eso se importa como
@@ -54,6 +67,15 @@ class PlaybackService : MediaLibraryService() {
 
     /** Request de focus activo mientras BASS reproduce; null si no. */
     private var bassFocusRequest: AudioFocusRequest? = null
+
+    /** Scope dedicado a la suscripción reactiva de la biblioteca. */
+    private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+
+    /** Job de la suscripción al Flow de canciones. */
+    private var librarySubscriptionJob: Job? = null
+
+    /** Repositorio de portadas para construir MediaItems. */
+    private val coverRepository by lazy { CoverRepository(applicationContext) }
 
     // =========================================================================
     // Audio focus para BASS
@@ -139,6 +161,9 @@ class PlaybackService : MediaLibraryService() {
             ContextCompat.RECEIVER_NOT_EXPORTED
         )
         noisyReceiverRegistered = true
+
+        // Suscribirse a cambios en la biblioteca para mantener la playlist sincronizada
+        subscribeToLibraryChanges()
     }
 
     override fun onGetSession(
@@ -156,6 +181,11 @@ class PlaybackService : MediaLibraryService() {
     }
 
     override fun onDestroy() {
+        // Cancelar suscripción reactiva
+        librarySubscriptionJob?.cancel()
+        librarySubscriptionJob = null
+        serviceScope.cancel()
+
         if (noisyReceiverRegistered) {
             unregisterReceiver(noisyReceiver)
             noisyReceiverRegistered = false
@@ -167,6 +197,32 @@ class PlaybackService : MediaLibraryService() {
         mediaSession?.release()
         mediaSession = null
         super.onDestroy()
+    }
+
+    // =========================================================================
+    // Sincronización reactiva de playlist
+    // =========================================================================
+
+    /**
+     * Se suscribe al Flow de canciones de AudioRepository y actualiza
+     * automáticamente la playlist del adapter cuando la biblioteca cambia.
+     *
+     * Esto garantiza que la playlist del reproductor siempre esté sincronizada
+     * con la biblioteca actual, sin importar el orden de las canciones o
+     * cuándo se agreguen/eliminen archivos.
+     */
+    private fun subscribeToLibraryChanges() {
+        val audioRepository = (application as OpenPlayerApplication).audioRepository
+        
+        librarySubscriptionJob = serviceScope.launch {
+            audioRepository.songs.collect { songs ->
+                // Construir MediaItems desde las canciones
+                val mediaItems = songs.map { it.toMediaItem(coverRepository) }
+                
+                // Actualizar la playlist del adapter sin interrumpir reproducción actual
+                player?.updatePlaylist(mediaItems)
+            }
+        }
     }
 
     /**

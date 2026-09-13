@@ -201,6 +201,66 @@ class BassPlayerAdapter(
     }
 
     // =========================================================================
+    // API pública para actualización de playlist
+    // =========================================================================
+
+    /**
+     * Actualiza la playlist interna del adapter sin interrumpir la
+     * reproducción actual si la canción sigue existiendo.
+     *
+     * Este método es llamado por PlaybackService cuando detecta cambios
+     * en la biblioteca musical (canciones agregadas, eliminadas o
+     * modificadas). Se ejecuta en el hilo del Looper del player para
+     * garantizar thread safety.
+     *
+     * Comportamiento:
+     * - Si la canción actual sigue existiendo (mismo mediaId), mantiene
+     *   su reproducción sin interrupciones y ajusta el índice si cambió
+     *   de posición.
+     * - Si la canción actual fue eliminada, libera el stream y marca
+     *   el estado como IDLE.
+     * - Si no había canción reproduciéndose, simplemente actualiza la
+     *   lista.
+     *
+     * @param newPlaylist Nueva lista de MediaItem que reemplaza la actual.
+     */
+    fun updatePlaylist(newPlaylist: List<MediaItem>) {
+        handler.post {
+            // Identificar la canción actual por su mediaId
+            val currentMediaId = if (currentIndex in currentPlaylist.indices) {
+                currentPlaylist[currentIndex].mediaId
+            } else null
+
+            // Actualizar la playlist
+            currentPlaylist = newPlaylist
+
+            if (currentMediaId != null) {
+                // Buscar la canción actual en la nueva playlist
+                val newIndex = currentPlaylist.indexOfFirst { it.mediaId == currentMediaId }
+                
+                if (newIndex >= 0) {
+                    // La canción sigue existiendo, actualizar índice sin interrumpir
+                    currentIndex = newIndex
+                } else {
+                    // La canción fue eliminada, liberar stream y resetear estado
+                    releaseCurrentStream()
+                    currentPositionMs = 0L
+                    currentDurationMs = C.TIME_UNSET
+                    currentIndex = 0.coerceIn(0, max(0, currentPlaylist.size - 1))
+                    currentPlaybackState = Player.STATE_IDLE
+                    currentPlayWhenReady = false
+                    stopPolling()
+                }
+            } else {
+                // No había canción reproduciéndose, ajustar índice
+                currentIndex = 0.coerceIn(0, max(0, currentPlaylist.size - 1))
+            }
+
+            invalidateState()
+        }
+    }
+
+    // =========================================================================
     // Handlers de comandos Media3
     // =========================================================================
 
@@ -500,38 +560,40 @@ class BassPlayerAdapter(
      * [Player.STATE_ENDED].
      */
     private fun onTrackEnded() {
-        val nextIndex = currentIndex + 1
-        if (nextIndex < currentPlaylist.size) {
-            currentIndex = nextIndex
-            releaseCurrentStream()
-            createStreamForCurrentItem()
-            currentPositionMs = 0L
-            if (currentPlayWhenReady && currentHandle != 0) {
-                playInternal()
-            }
-        } else {
-            currentPlaybackState = Player.STATE_ENDED
-            currentPlayWhenReady = false
-            stopPolling()
+    val nextIndex = currentIndex + 1
+
+    if (nextIndex < currentPlayList.size) {
+        currentIndex = nextIndex
+        releaseCurrentStream()
+        createStreamForCurrentItem()
+        currentPositionMs = 0L
+
+        if (currentPlayWhenReady && currentHandle != 0) {
+            playInternal()
         }
-    }
-
-    // =========================================================================
-    // Constantes
-    // =========================================================================
-
-    companion object {
-        /** Intervalo del polling de posición en milisegundos. */
-        private const val POLLING_INTERVAL_MS = 500L
-
-        /**
-         * Umbral para considerar que una pista terminó: si la
-         * posición está a menos de este valor del final y el estado
-         * pasa a STOPPED, se considera fin natural.
-         */
-        private const val END_THRESHOLD_MS = 500L
-
-        /** Sample rate por defecto para inicializar BASS. */
-        private const val DEFAULT_SAMPLE_RATE = 44100
+    } else {
+        currentPlaybackState = Player.STATE_ENDED
+        currentPlayWhenReady = false
+        stopPolling()
     }
 }
+
+// ============================================================================
+// Constantes
+// ============================================================================
+
+companion object {
+    /** Intervalo del polling de posición en milisegundos. */
+    private const val POLLING_INTERVAL_MS = 500L
+
+    /**
+     * Umbral para considerar que una pista terminó: si la
+     * posición está a menos de este valor del final y el estado
+     * pasa a STOPPED, se considera fin natural.
+     */
+    private const val END_THRESHOLD_MS = 500L
+
+    /** Sample rate por defecto para inicializar BASS. */
+    private const val DEFAULT_SAMPLE_RATE = 44100
+}
+        
