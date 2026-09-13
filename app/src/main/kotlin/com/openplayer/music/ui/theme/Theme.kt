@@ -21,6 +21,18 @@ import androidx.compose.ui.graphics.Color
  */
 val LocalFloatingIconColor = compositionLocalOf { Color.Gray }
 
+/**
+ * Color para iconos de navegación activos.
+ * Se provee mediante CompositionLocal para acceso global según el tema.
+ */
+val LocalNavIconActiveColor = compositionLocalOf { Color.Black }
+
+/**
+ * Color para iconos de navegación inactivos.
+ * Se provee mediante CompositionLocal para acceso global según el tema.
+ */
+val LocalNavIconInactiveColor = compositionLocalOf { Color.Gray }
+
 private val LightColors = lightColorScheme(
     primary = LightPrimary,
     onPrimary = LightOnPrimary,
@@ -137,7 +149,23 @@ fun OpenPlayerTheme(
         ThemeMode.AMOLED -> AmoledFloatingIcon
     }
 
-    CompositionLocalProvider(LocalFloatingIconColor provides floatingIconColor) {
+    val navIconActiveColor = when (themeMode) {
+        ThemeMode.LIGHT -> LightNavIconActive
+        ThemeMode.DARK -> DarkNavIconActive
+        ThemeMode.AMOLED -> AmoledNavIconActive
+    }
+
+    val navIconInactiveColor = when (themeMode) {
+        ThemeMode.LIGHT -> LightNavIconInactive
+        ThemeMode.DARK -> DarkNavIconInactive
+        ThemeMode.AMOLED -> AmoledNavIconInactive
+    }
+
+    CompositionLocalProvider(
+        LocalFloatingIconColor provides floatingIconColor,
+        LocalNavIconActiveColor provides navIconActiveColor,
+        LocalNavIconInactiveColor provides navIconInactiveColor
+    ) {
         MaterialTheme(
             colorScheme = colorScheme,
             typography = Typography,
