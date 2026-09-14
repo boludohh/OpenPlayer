@@ -3,6 +3,7 @@ package com.openplayer.music.ui.components
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
@@ -24,7 +25,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import com.openplayer.music.R
@@ -52,6 +52,7 @@ import com.openplayer.music.ui.theme.LocalNavIconInactiveColor
  *   navegación del sistema, y reserva el espacio inferior (insets) para
  *   que el contenido no quede tapado por la barra de gestos.
  * - Animación crossfade suave entre outline y filled al cambiar de pestaña.
+ * - Efecto ripple desactivado para un aspecto más limpio al hacer clic.
  */
 @Composable
 fun BottomNavigationPanel(modifier: Modifier = Modifier) {
@@ -101,6 +102,7 @@ private enum class NavTab {
 
 /**
  * Icono de navegación individual con transición crossfade entre outline y filled.
+ * El efecto visual de ripple (destello al tocar) está desactivado intencionalmente.
  *
  * @param tab Pestaña que representa este icono
  * @param isSelected Si está actualmente seleccionado
@@ -116,6 +118,9 @@ private fun NavIcon(
 ) {
     val activeColor = LocalNavIconActiveColor.current
     val inactiveColor = LocalNavIconInactiveColor.current
+    
+    // InteractionSource necesario para desactivar el ripple effect
+    val interactionSource = remember { MutableInteractionSource() }
 
     val (outlineRes, filledRes) = when (tab) {
         NavTab.HOME -> R.drawable.ic_nav_home_outline to R.drawable.ic_nav_home_filled
@@ -129,7 +134,11 @@ private fun NavIcon(
         modifier = modifier
             .fillMaxHeight()
             .size(48.dp)
-            .clickable(onClick = onClick),
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null, // Esto elimina el efecto ripple gris
+                onClick = onClick
+            ),
         contentAlignment = Alignment.Center
     ) {
         Crossfade(
