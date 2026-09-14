@@ -153,7 +153,7 @@ private fun NavIcon(
                 painter = painter,
                 contentDescription = null,
                 tint = tint,
-                modifier = Modifier.size(32.dp)
+                modifier = Modifier.size(24.dp)
             )
         }
     }
