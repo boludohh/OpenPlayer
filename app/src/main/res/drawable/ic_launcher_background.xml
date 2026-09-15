@@ -11,8 +11,8 @@
         <aapt:attr name="android:fillColor">
             <gradient
                 android:type="linear"
-                android:startColor="#063F2D"
-                android:endColor="#0BAA58"
+                android:startColor="#FFC98B"
+                android:endColor="#E8590C"
                 android:startX="0"
                 android:startY="0"
                 android:endX="108"
