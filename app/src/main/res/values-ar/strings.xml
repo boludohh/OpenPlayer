@@ -31,4 +31,5 @@
     <string name="albums_screen_placeholder">الألبومات</string>
     <string name="artists_screen_placeholder">الفنانون</string>
     <string name="playlist_screen_placeholder">قوائم التشغيل</string>
+    <string name="search_placeholder">بحث</string>
 </resources>
