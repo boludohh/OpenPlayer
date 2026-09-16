@@ -44,7 +44,7 @@ import com.openplayer.music.ui.screens.songs.SongsScreen
  * - Barra de búsqueda global visible en las 5 pestañas, anclada arriba
  * - Panel inferior siempre visible con animación de elevación en icono activo
  * - Padding inferior de 130dp para no ocultar contenido bajo el panel
- * - Padding superior de 35dp para no ocultar contenido bajo la barra de búsqueda
+ * - Padding superior de 60dp para no ocultar contenido bajo la barra de búsqueda
  * - StatusBarsPadding aplicado al contenedor raíz para que el contenido no
  *   quede detrás de la barra de estado del sistema.
  */
@@ -60,7 +60,7 @@ fun MainScreen(audioRepository: AudioRepository) {
             .statusBarsPadding() // Reserva el espacio de la barra de estado una sola vez
     ) {
         // Contenido principal con transición fade entre pantallas
-        // Padding top = 35dp (altura de la barra de búsqueda)
+        // Padding top = 60dp (altura de la barra de búsqueda)
         // Padding bottom = 130dp (altura del panel de navegación inferior)
         AnimatedContent(
             targetState = selectedTab,
@@ -71,7 +71,7 @@ fun MainScreen(audioRepository: AudioRepository) {
             label = "screenTransition",
             modifier = Modifier
                 .fillMaxSize()
-                .padding(top = 35.dp, bottom = 130.dp)
+                .padding(top = 60.dp, bottom = 130.dp)
         ) { tab ->
             when (tab) {
                 NavTab.HOME -> HomeScreen()
@@ -83,11 +83,11 @@ fun MainScreen(audioRepository: AudioRepository) {
         }
 
         // Barra de búsqueda global (visible en las 5 pestañas)
-        // Márgenes: start = 20dp (reservado para icono futuro), end = 10dp
+        // Márgenes: start = 60dp (reservado para icono futuro), end = 20dp
         SearchBar(
             modifier = Modifier
                 .align(Alignment.TopStart)
-                .padding(start = 20.dp, end = 10.dp)
+                .padding(start = 60.dp, end = 20.dp)
         )
 
         // Panel de navegación inferior con estado compartido
