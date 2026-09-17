@@ -23,8 +23,8 @@ android {
         applicationId = "com.openplayer.music"
         minSdk = 27
         targetSdk = 37
-        versionCode = 28
-        versionName = "0.13.2"
+        versionCode = 29
+        versionName = "0.13.3"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -75,14 +75,10 @@ android {
         compose = true
     }
 
-    packaging {
-        jniLibs {
-            // Fuerza la extracción de las librerías nativas al filesystem,
-            // necesario para que BASS_PluginLoad() pueda hacer dlopen()
-            // sobre los plugins (libbassflac.so, libbassopus.so, libbass_aac.so).
-            useLegacyPackaging = true
-        }
-    }
+    // packaging eliminado: useLegacyPackaging ya no es necesario.
+    // Todos los add-ons de BASS (Opus, FLAC, AAC) se usan vía wrappers oficiales
+    // con System.loadLibrary(), que carga las .so directamente desde el APK
+    // sin necesidad de extracción al filesystem.
 
     externalNativeBuild {
         cmake {
@@ -100,7 +96,7 @@ android {
     sourceSets {
         getByName("main") {
             // Directorio de librerías nativas precompiladas:
-            // - bass/: libbass.so, libbassflac.so, libbassopus.so
+            // - bass/: libbass.so, libbassmix.so, libbassflac.so, libbassopus.so, libbass_aac.so
             jniLibs.srcDirs("src/main/cpp/bass")
         }
     }

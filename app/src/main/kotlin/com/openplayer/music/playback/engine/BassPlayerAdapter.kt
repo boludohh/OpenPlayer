@@ -78,9 +78,6 @@ class BassPlayerAdapter(
 
     // ====== Estado interno del reproductor ======
 
-    /** Directorio de librerías nativas para cargar plugins BASS. */
-    private val nativeLibDir: String = context.applicationInfo.nativeLibraryDir
-
     /** Handle del mixer BASS. 0 significa que no hay mixer creado. */
     private var mixerHandle: Int = 0
 
@@ -146,8 +143,10 @@ class BassPlayerAdapter(
         // Inicializa BASS con cadena de fallback de device de audio
         bassInitialized = initBassWithFallback()
 
-        // Nota: Opus, FLAC y AAC se usan directamente via sus wrappers oficiales,
-        // no como plugins. Por eso no se cargan aquí.
+        // Todos los formatos soportados (Opus, FLAC, AAC) se usan vía sus
+        // wrappers oficiales (BASSOPUS, BASSFLAC, BASS_AAC), que cargan sus
+        // respectivas librerías nativas automáticamente vía System.loadLibrary.
+        // Por eso no hay carga de plugins aquí.
         if (bassInitialized) {
             createMixer()
         }
