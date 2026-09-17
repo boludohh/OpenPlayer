@@ -22,6 +22,13 @@
 
 # Reglas para BassNative (JNI)
 # Preserva los métodos nativos para que R8 no los elimine
--keep class io.github.boludohh.nokliplayer.native.BassNative {
+-keep class com.openplayer.music.native.BassNative {
     native <methods>;
 }
+
+# Reglas para BASS y BASSmix (JNI)
+# Preserva todas las clases del paquete com.un4seen.bass porque los símbolos
+# JNI en libbass.so y libbassmix.so codifican el nombre exacto del paquete.
+# Si R8 renombra estas clases, el enlace nativo se rompe en runtime.
+-keep class com.un4seen.bass.** { *; }
+-keepclassmembers class com.un4seen.bass.** { *; }
