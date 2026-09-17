@@ -13,7 +13,9 @@ import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
 import com.openplayer.music.data.media.AudioFormatParser
 import com.un4seen.bass.BASS
+import com.un4seen.bass.BASSFLAC
 import com.un4seen.bass.BASSOPUS
+import com.un4seen.bass.BASS_AAC
 import com.un4seen.bass.BASSmix
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -31,7 +33,8 @@ import kotlin.math.max
  * Extiende [SimpleBasePlayer] para reutilizar la implementación base
  * de la interfaz [Player] y solo tener que sobrescribir los handlers
  * que traducen cada comando Media3 a llamadas equivalentes de BASS
- * usando los wrappers oficiales [BASS], [BASSmix] y [BASSOPUS].
+ * usando los wrappers oficiales [BASS], [BASSmix], [BASSOPUS],
+ * [BASSFLAC] y [BASS_AAC].
  *
  * ## Arquitectura de reproducción con BASSmix
  *
@@ -43,7 +46,8 @@ import kotlin.math.max
  * 2. **Streams decodificadores**: cada canción se crea con
  *    `BASS_STREAM_DECODE` (sin PRESCAN, apertura instantánea) y se añade
  *    al mixer, no se reproduce directamente. Para archivos Opus se usa
- *    [BASSOPUS] directamente; para el resto se usa [BASS] con plugins.
+ *    [BASSOPUS], para FLAC se usa [BASSFLAC], para AAC se usa [BASS_AAC],
+ *    y para el resto (MP3, OGG Vorbis) se usa [BASS] genérico.
  * 3. **Gapless puro**: el polling detecta cuánto falta para el final y,
  *    [GAPLESS_SCHEDULE_MS] antes, añade la siguiente pista con
  *    `BASS_Mixer_StreamAddChannelEx` usando un start RELATIVO en bytes
@@ -142,10 +146,9 @@ class BassPlayerAdapter(
         // Inicializa BASS con cadena de fallback de device de audio
         bassInitialized = initBassWithFallback()
 
-        // Cargar plugins FLAC y AAC después de inicializar BASS
-        // (Opus se usa directamente via BASSOPUS wrapper, no como plugin)
+        // Nota: Opus, FLAC y AAC se usan directamente via sus wrappers oficiales,
+        // no como plugins. Por eso no se cargan aquí.
         if (bassInitialized) {
-            loadPlugins()
             createMixer()
         }
     }
@@ -195,24 +198,6 @@ class BassPlayerAdapter(
         android.util.Log.e(TAG, "BASS_Init failed with AudioTrack, error: ${BASS.BASS_ErrorGetCode()}")
 
         return false
-    }
-
-    /**
-     * Carga los plugins de BASS (FLAC y AAC) desde el directorio
-     * de librerías nativas de Android.
-     * Nota: Opus se usa directamente via BASSOPUS wrapper, no como plugin.
-     */
-    private fun loadPlugins() {
-        val plugins = listOf("libbassflac.so", "libbass_aac.so")
-        for (plugin in plugins) {
-            val path = "$nativeLibDir/$plugin"
-            val handle = BASS.BASS_PluginLoad(path, 0)
-            if (handle == 0) {
-                android.util.Log.w(TAG, "Failed to load $plugin, error: ${BASS.BASS_ErrorGetCode()}")
-            } else {
-                android.util.Log.i(TAG, "$plugin loaded successfully")
-            }
-        }
     }
 
     /**
@@ -532,9 +517,6 @@ class BassPlayerAdapter(
         if (!bassInitialized) {
             configureLowLatency()
             bassInitialized = initBassWithFallback()
-            if (bassInitialized) {
-                loadPlugins()
-            }
         }
 
         if (bassInitialized && mixerHandle == 0) {
@@ -554,8 +536,8 @@ class BassPlayerAdapter(
     /**
      * Crea un stream decodificador BASS para el ítem actual de la playlist
      * y lo añade al mixer. Sin PRESCAN para que el inicio sea instantáneo.
-     * Para archivos Opus usa BASSOPUS directamente; para el resto usa BASS
-     * con plugins.
+     * Para archivos Opus usa BASSOPUS, para FLAC usa BASSFLAC, para AAC
+     * usa BASS_AAC, y para el resto (MP3, OGG Vorbis) usa BASS genérico.
      */
     private fun createStreamForCurrentItem() {
         if (currentPlaylist.isEmpty() || currentIndex !in currentPlaylist.indices) {
@@ -597,42 +579,91 @@ class BassPlayerAdapter(
     }
 
     /**
-     * Crea un stream decodificador para el archivo dado.
-     * Si es Opus, usa BASSOPUS directamente; si no, usa BASS con plugins.
+     * Crea un stream decodificador para el archivo dado, eligiendo el
+     * wrapper apropiado según el formato detectado:
+     * - Opus → BASSOPUS.BASS_OPUS_StreamCreateFile()
+     * - FLAC u OGG FLAC → BASSFLAC.BASS_FLAC_StreamCreateFile()
+     * - AAC/M4A → BASS_AAC.BASS_AAC_StreamCreateFile()
+     * - Otros (MP3, OGG Vorbis, etc.) → BASS.BASS_StreamCreateFile()
      *
      * @param path Ruta absoluta al archivo de audio.
      * @return Handle del stream (> 0) o 0 si falló.
      */
     private fun createDecoderStream(path: String): Int {
-        return if (isOpus(path)) {
-            BASSOPUS.BASS_OPUS_StreamCreateFile(
-                path,
-                0,
-                0,
-                BASS.BASS_STREAM_DECODE
-            )
-        } else {
-            BASS.BASS_StreamCreateFile(
-                path,
-                0,
-                0,
-                BASS.BASS_STREAM_DECODE
-            )
+        val format = try {
+            if (AudioFormatParser.isValid(path)) {
+                when {
+                    path.endsWith(".opus", ignoreCase = true) -> "opus"
+                    path.endsWith(".flac", ignoreCase = true) -> "flac"
+                    path.endsWith(".ogg", ignoreCase = true) -> {
+                        // Detectar si es OGG FLAC o OGG Vorbis/Opus
+                        when (detectOggFormat(path)) {
+                            "flac" -> "flac"
+                            "opus" -> "opus"
+                            else -> "vorbis"
+                        }
+                    }
+                    path.endsWith(".m4a", ignoreCase = true) || path.endsWith(".aac", ignoreCase = true) -> "aac"
+                    else -> "other"
+                }
+            } else {
+                "other"
+            }
+        } catch (e: Exception) {
+            android.util.Log.w(TAG, "Error detecting format for $path", e)
+            "other"
+        }
+
+        return when (format) {
+            "opus" -> BASSOPUS.BASS_OPUS_StreamCreateFile(path, 0, 0, BASS.BASS_STREAM_DECODE)
+            "flac" -> BASSFLAC.BASS_FLAC_StreamCreateFile(path, 0, 0, BASS.BASS_STREAM_DECODE)
+            "aac" -> BASS_AAC.BASS_AAC_StreamCreateFile(path, 0, 0, BASS.BASS_STREAM_DECODE)
+            else -> BASS.BASS_StreamCreateFile(path, 0, 0, BASS.BASS_STREAM_DECODE)
         }
     }
 
     /**
-     * Detecta si el archivo es Opus usando AudioFormatParser.
+     * Detecta el formato de un archivo OGG leyendo el header.
      *
-     * @param path Ruta absoluta al archivo de audio.
-     * @return true si es Opus, false en caso contrario.
+     * @param path Ruta absoluta al archivo OGG.
+     * @return "flac", "opus", "vorbis" o "unknown".
      */
-    private fun isOpus(path: String): Boolean {
+    private fun detectOggFormat(path: String): String {
         return try {
-            AudioFormatParser.isValid(path) && path.endsWith(".opus", ignoreCase = true)
+            java.io.RandomAccessFile(path, "r").use { file ->
+                val header = ByteArray(64)
+                val read = file.read(header)
+                if (read < 27) return "unknown"
+                
+                // Verificar magic "OggS"
+                if (header[0] != 'O'.code.toByte() || header[1] != 'g'.code.toByte() ||
+                    header[2] != 'g'.code.toByte() || header[3] != 'S'.code.toByte()) {
+                    return "unknown"
+                }
+                
+                // Buscar en el primer paquete
+                if (read >= 8 && header[0] == 0x01.toByte() && 
+                    header[1] == 'v'.code.toByte() && header[2] == 'o'.code.toByte() &&
+                    header[3] == 'r'.code.toByte() && header[4] == 'b'.code.toByte() &&
+                    header[5] == 'i'.code.toByte() && header[6] == 's'.code.toByte()) {
+                    return "vorbis"
+                }
+                if (read >= 8 && header[0] == 'O'.code.toByte() && 
+                    header[1] == 'p'.code.toByte() && header[2] == 'u'.code.toByte() &&
+                    header[3] == 's'.code.toByte() && header[4] == 'H'.code.toByte() &&
+                    header[5] == 'e'.code.toByte() && header[6] == 'a'.code.toByte() &&
+                    header[7] == 'd'.code.toByte()) {
+                    return "opus"
+                }
+                if (read >= 5 && header[0] == 0x7F.toByte() && 
+                    header[1] == 'F'.code.toByte() && header[2] == 'L'.code.toByte() &&
+                    header[3] == 'A'.code.toByte() && header[4] == 'C'.code.toByte()) {
+                    return "flac"
+                }
+                "unknown"
+            }
         } catch (e: Exception) {
-            android.util.Log.w(TAG, "Error detecting Opus format for $path", e)
-            false
+            "unknown"
         }
     }
 
