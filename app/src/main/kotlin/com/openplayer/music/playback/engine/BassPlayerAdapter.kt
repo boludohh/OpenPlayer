@@ -11,7 +11,9 @@ import androidx.media3.common.SimpleBasePlayer
 import androidx.media3.common.util.UnstableApi
 import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
+import com.openplayer.music.data.media.AudioFormatParser
 import com.un4seen.bass.BASS
+import com.un4seen.bass.BASSOPUS
 import com.un4seen.bass.BASSmix
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -29,7 +31,7 @@ import kotlin.math.max
  * Extiende [SimpleBasePlayer] para reutilizar la implementación base
  * de la interfaz [Player] y solo tener que sobrescribir los handlers
  * que traducen cada comando Media3 a llamadas equivalentes de BASS
- * usando los wrappers oficiales [BASS] y [BASSmix].
+ * usando los wrappers oficiales [BASS], [BASSmix] y [BASSOPUS].
  *
  * ## Arquitectura de reproducción con BASSmix
  *
@@ -40,7 +42,8 @@ import kotlin.math.max
  *    y re-vincula los streams existentes.
  * 2. **Streams decodificadores**: cada canción se crea con
  *    `BASS_STREAM_DECODE` (sin PRESCAN, apertura instantánea) y se añade
- *    al mixer, no se reproduce directamente.
+ *    al mixer, no se reproduce directamente. Para archivos Opus se usa
+ *    [BASSOPUS] directamente; para el resto se usa [BASS] con plugins.
  * 3. **Gapless puro**: el polling detecta cuánto falta para el final y,
  *    [GAPLESS_SCHEDULE_MS] antes, añade la siguiente pista con
  *    `BASS_Mixer_StreamAddChannelEx` usando un start RELATIVO en bytes
@@ -139,7 +142,8 @@ class BassPlayerAdapter(
         // Inicializa BASS con cadena de fallback de device de audio
         bassInitialized = initBassWithFallback()
 
-        // Cargar plugins FLAC, Opus y AAC después de inicializar BASS
+        // Cargar plugins FLAC y AAC después de inicializar BASS
+        // (Opus se usa directamente via BASSOPUS wrapper, no como plugin)
         if (bassInitialized) {
             loadPlugins()
             createMixer()
@@ -194,11 +198,12 @@ class BassPlayerAdapter(
     }
 
     /**
-     * Carga los plugins de BASS (FLAC, Opus y AAC) desde el directorio
+     * Carga los plugins de BASS (FLAC y AAC) desde el directorio
      * de librerías nativas de Android.
+     * Nota: Opus se usa directamente via BASSOPUS wrapper, no como plugin.
      */
     private fun loadPlugins() {
-        val plugins = listOf("libbassflac.so", "libbassopus.so", "libbass_aac.so")
+        val plugins = listOf("libbassflac.so", "libbass_aac.so")
         for (plugin in plugins) {
             val path = "$nativeLibDir/$plugin"
             val handle = BASS.BASS_PluginLoad(path, 0)
@@ -549,6 +554,8 @@ class BassPlayerAdapter(
     /**
      * Crea un stream decodificador BASS para el ítem actual de la playlist
      * y lo añade al mixer. Sin PRESCAN para que el inicio sea instantáneo.
+     * Para archivos Opus usa BASSOPUS directamente; para el resto usa BASS
+     * con plugins.
      */
     private fun createStreamForCurrentItem() {
         if (currentPlaylist.isEmpty() || currentIndex !in currentPlaylist.indices) {
@@ -566,12 +573,7 @@ class BassPlayerAdapter(
             return
         }
 
-        val handle = BASS.BASS_StreamCreateFile(
-            path,
-            0,
-            0,
-            BASS.BASS_STREAM_DECODE
-        )
+        val handle = createDecoderStream(path)
 
         if (handle == 0) {
             currentHandle = 0
@@ -591,6 +593,46 @@ class BassPlayerAdapter(
                 currentHandle,
                 BASSmix.BASS_MIXER_CHAN_AUTOFREE
             )
+        }
+    }
+
+    /**
+     * Crea un stream decodificador para el archivo dado.
+     * Si es Opus, usa BASSOPUS directamente; si no, usa BASS con plugins.
+     *
+     * @param path Ruta absoluta al archivo de audio.
+     * @return Handle del stream (> 0) o 0 si falló.
+     */
+    private fun createDecoderStream(path: String): Int {
+        return if (isOpus(path)) {
+            BASSOPUS.BASS_OPUS_StreamCreateFile(
+                path,
+                0,
+                0,
+                BASS.BASS_STREAM_DECODE
+            )
+        } else {
+            BASS.BASS_StreamCreateFile(
+                path,
+                0,
+                0,
+                BASS.BASS_STREAM_DECODE
+            )
+        }
+    }
+
+    /**
+     * Detecta si el archivo es Opus usando AudioFormatParser.
+     *
+     * @param path Ruta absoluta al archivo de audio.
+     * @return true si es Opus, false en caso contrario.
+     */
+    private fun isOpus(path: String): Boolean {
+        return try {
+            AudioFormatParser.isValid(path) && path.endsWith(".opus", ignoreCase = true)
+        } catch (e: Exception) {
+            android.util.Log.w(TAG, "Error detecting Opus format for $path", e)
+            false
         }
     }
 
@@ -621,12 +663,7 @@ class BassPlayerAdapter(
             return
         }
 
-        val handle = BASS.BASS_StreamCreateFile(
-            nextPath,
-            0,
-            0,
-            BASS.BASS_STREAM_DECODE
-        )
+        val handle = createDecoderStream(nextPath)
         if (handle == 0) {
             return
         }
