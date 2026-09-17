@@ -29,47 +29,33 @@ import kotlin.math.max
  *
  * Extiende [SimpleBasePlayer] para reutilizar la implementación base
  * de la interfaz [Player] y solo tener que sobrescribir los handlers
- * que traducen cada comando Media3 a llamadas equivalentes del glue
- * de BASS ([BassNative]) y BASSmix.
- *
- * ## Responsabilidades de este adapter
- *
- * - Crear y liberar streams BASS.
- * - Traducir play/pause/seek/stop/prepare.
- * - Reportar estado (posición, duración, buffering, ended) a Media3.
- * - Avanzar automáticamente al siguiente item cuando termina la pista.
- * - **Gapless playback**: transición sin silencio entre canciones usando BASSmix.
- * - **Crossfade**: fundido suave de 4000ms entre canciones cuando termina una
- *   y empieza la siguiente (configurable vía [CROSSFADE_MS]).
- *
- * ## Fuera de su responsabilidad
- *
- * - **Audio focus**: lo maneja el `PlaybackService` (Fase 4) de forma
- *   unificada para ambos motores (ExoPlayer y BASS).
- * - **Selección de motor**: la gestiona `PlaybackEngineManager` (Fase 5).
- * - **Capa de datos Song**: no conoce `AudioRepository` ni `Song`.
- *   Quien construye el `MediaItem` (UI o servicio) se encarga de
- *   incluir el URI del archivo en `localConfiguration.uri`.
+ * que traducen cada comando Media3 a llamadas equivalentes de BASS
+ * ([BassNative] para init/plugins) y de los wrappers oficiales
+ * [BASS] / [BASSmix] para streams, mixer, crossfade y gapless.
  *
  * ## Arquitectura de reproducción con BASSmix
  *
  * 1. **Mixer stream**: se crea una sola vez al inicializar y es el único
  *    stream con salida de audio al dispositivo.
- * 2. **Streams decodificadores**: cada canción se crea con `BASS_STREAM_DECODE`
- *    y se añade al mixer, no se reproduce directamente.
- * 3. **Gapless**: al empezar la canción N, se programa N+1 con
- *    `BASS_Mixer_StreamAddChannelEx(startBytes)` donde `startBytes` es la
- *    posición exacta donde N termina → cero silencio entre pistas.
- * 4. **Crossfade**: cuando el polling detecta que quedan [CROSSFADE_MS] para
- *    el final de N, se añade N+1 inmediatamente y se aplica un envelope de
- *    volumen descendente a N → fundido suave.
+ * 2. **Streams decodificadores**: cada canción se crea con
+ *    `BASS_STREAM_DECODE` (sin PRESCAN, para inicio instantáneo) y se
+ *    añade al mixer, no se reproduce directamente.
+ * 3. **Programación justo a tiempo**: el polling detecta cuánto falta
+ *    para el final de la pista y, en ese momento, prepara la siguiente:
+ *    - Con crossfade (> 0 ms): la añade YA al mixer con envelope de
+ *      volumen 0→1, y aplica envelope 1→0 a la actual (fundido solapado).
+ *    - Sin crossfade: la añade con `BASS_Mixer_StreamAddChannelEx` usando
+ *      un `start` RELATIVO en bytes del mixer equivalente al tiempo
+ *      restante → arranca exactamente cuando termina la actual (gapless).
+ * 4. **Seeks**: se realizan con `BASS_Mixer_ChannelSetPosition` (flush del
+ *    buffer del mixer incluido) y cancelan cualquier transición pendiente,
+ *    que el polling reprograma automáticamente después.
  *
- * ## Mecanismo de polling
+ * ## Fuera de su responsabilidad
  *
- * Como el glue actual no provee callbacks nativos para detectar
- * cambios de estado, el adapter consulta la posición y el estado del
- * canal cada [POLLING_INTERVAL_MS] desde un hilo de coroutines, y
- * publica los cambios al hilo del Looper del player vía [Handler].
+ * - **Audio focus**: lo maneja el `PlaybackService` de forma unificada.
+ * - **Selección de motor**: la gestiona `PlaybackEngineManager` (Fase 5).
+ * - **Capa de datos Song**: no conoce `AudioRepository` ni `Song`.
  */
 @OptIn(UnstableApi::class)
 class BassPlayerAdapter(
@@ -85,8 +71,18 @@ class BassPlayerAdapter(
     /** Handle del stream decodificador actual. 0 si no hay stream. */
     private var currentHandle: Int = 0
 
-    /** Handle del stream decodificador siguiente (para gapless/crossfade). 0 si no hay. */
+    /** Handle del stream decodificador siguiente (transición). 0 si no hay. */
     private var nextHandle: Int = 0
+
+    /**
+     * True si la transición de la pista actual ya fue programada
+     * (crossfade o gapless), o si ya se decidió que no hay siguiente.
+     * Evita reprogramar en cada ciclo de polling.
+     */
+    private var nextScheduled: Boolean = false
+
+    /** Flag para saber si hay un crossfade activo actualmente. */
+    private var isCrossfading: Boolean = false
 
     /** Posición de reproducción actual en milisegundos. */
     private var currentPositionMs: Long = 0L
@@ -116,9 +112,6 @@ class BassPlayerAdapter(
     /** Índice del ítem actual dentro de [currentPlaylist]. */
     private var currentIndex: Int = 0
 
-    /** Flag para saber si el crossfade está activo actualmente. */
-    private var isCrossfading: Boolean = false
-
     // ====== Hilos y ciclos ======
 
     /** Handler en el Looper del player para publicar cambios de estado. */
@@ -138,8 +131,8 @@ class BassPlayerAdapter(
         // System.loadLibrary que es idempotente; la inicialización
         // del engine también lo es internamente.
         bassInitialized = BassNative.init(DEFAULT_SAMPLE_RATE)
-        
-        // Cargar plugins FLAC y Opus después de inicializar BASS
+
+        // Cargar plugins FLAC, Opus y AAC después de inicializar BASS
         if (bassInitialized) {
             val nativeLibDir = context.applicationInfo.nativeLibraryDir
             BassNative.loadPlugins(nativeLibDir)
@@ -166,8 +159,6 @@ class BassPlayerAdapter(
             android.util.Log.e(TAG, "Failed to create mixer, error: $err")
         } else {
             android.util.Log.i(TAG, "Mixer created successfully")
-            // Reproducir el mixer
-            BASS.BASS_ChannelPlay(mixerHandle, false)
         }
     }
 
@@ -247,18 +238,13 @@ class BassPlayerAdapter(
      * reproducción actual si la canción sigue existiendo.
      *
      * Este método es llamado por PlaybackService cuando detecta cambios
-     * en la biblioteca musical (canciones agregadas, eliminadas o
-     * modificadas). Se ejecuta en el hilo del Looper del player para
-     * garantizar thread safety.
+     * en la biblioteca musical. Se ejecuta en el hilo del Looper del
+     * player para garantizar thread safety.
      *
-     * Comportamiento:
-     * - Si la canción actual sigue existiendo (mismo mediaId), mantiene
-     *   su reproducción sin interrupciones y ajusta el índice si cambió
-     *   de posición.
-     * - Si la canción actual fue eliminada, libera el stream y marca
-     *   el estado como IDLE.
-     * - Si no había canción reproduciéndose, simplemente actualiza la
-     *   lista.
+     * Si la canción actual sigue existiendo se mantiene la reproducción
+     * y se cancela cualquier transición pendiente (el polling la
+     * reprograma con la playlist nueva). Si fue eliminada, se libera el
+     * stream y se resetea el estado.
      *
      * @param newPlaylist Nueva lista de MediaItem que reemplaza la actual.
      */
@@ -273,16 +259,14 @@ class BassPlayerAdapter(
             currentPlaylist = newPlaylist
 
             if (currentMediaId != null) {
-                // Buscar la canción actual en la nueva playlist
                 val newIndex = currentPlaylist.indexOfFirst { it.mediaId == currentMediaId }
-                
+
                 if (newIndex >= 0) {
-                    // La canción sigue existiendo, actualizar índice sin interrumpir
                     currentIndex = newIndex
-                    // Reprogramar gapless para la siguiente si existe
-                    scheduleNextTrackForGapless()
+                    // Cancelar transición pendiente: la siguiente canción
+                    // pudo haber cambiado; el polling la reprograma.
+                    cancelPendingNext()
                 } else {
-                    // La canción fue eliminada, liberar stream y resetear estado
                     releaseCurrentStream()
                     currentPositionMs = 0L
                     currentDurationMs = C.TIME_UNSET
@@ -292,7 +276,6 @@ class BassPlayerAdapter(
                     stopPolling()
                 }
             } else {
-                // No había canción reproduciéndose, ajustar índice
                 currentIndex = 0.coerceIn(0, max(0, currentPlaylist.size - 1))
             }
 
@@ -317,15 +300,19 @@ class BassPlayerAdapter(
         if (currentPlaylist.isNotEmpty()) {
             createStreamForCurrentItem()
             if (startPositionMs > 0L && currentHandle != 0) {
-                BASS.BASS_ChannelSetPosition(
+                val bytes = BASS.BASS_ChannelSeconds2Bytes(
                     currentHandle,
-                    BASS.BASS_ChannelSeconds2Bytes(currentHandle, startPositionMs / 1000.0),
-                    BASS.BASS_POS_BYTE
+                    startPositionMs / 1000.0
+                )
+                BASSmix.BASS_Mixer_ChannelSetPosition(
+                    currentHandle,
+                    bytes,
+                    BASS.BASS_POS_BYTE or BASSmix.BASS_POS_MIXER_RESET
                 )
                 currentPositionMs = startPositionMs
             }
-            // Programar la siguiente pista para gapless
-            scheduleNextTrackForGapless()
+            // La transición a la siguiente pista la programa el polling
+            // justo a tiempo; aquí no se pre-programa nada.
         }
 
         invalidateState()
@@ -422,23 +409,27 @@ class BassPlayerAdapter(
             currentIndex = mediaItemIndex.coerceIn(0, max(0, currentPlaylist.size - 1))
             releaseCurrentStream()
             createStreamForCurrentItem()
-            
-            // Si el player estaba reproduciendo, iniciar automáticamente
-            // la reproducción del nuevo stream (para botón "Siguiente")
+
+            // Si el player estaba reproduciendo, asegurar mixer activo y polling
             if (currentPlayWhenReady && currentHandle != 0) {
                 playInternal()
             }
-            
-            // Programar la siguiente pista para gapless
-            scheduleNextTrackForGapless()
-        }
+        } else if (positionMs != C.TIME_UNSET && currentHandle != 0) {
+            // Seek dentro del ítem actual: cancelar transición pendiente
+            // (su posición de inicio quedó invalidada) y restaurar volumen
+            // si había un crossfade en curso.
+            val wasCrossfading = isCrossfading
+            cancelPendingNext()
+            if (wasCrossfading) {
+                restoreCurrentVolume()
+            }
 
-        // Seek dentro del ítem actual
-        if (positionMs != C.TIME_UNSET && currentHandle != 0) {
-            BASS.BASS_ChannelSetPosition(
+            // Seek correcto dentro del mixer: flush del buffer incluido
+            val bytes = BASS.BASS_ChannelSeconds2Bytes(currentHandle, positionMs / 1000.0)
+            BASSmix.BASS_Mixer_ChannelSetPosition(
                 currentHandle,
-                BASS.BASS_ChannelSeconds2Bytes(currentHandle, positionMs / 1000.0),
-                BASS.BASS_POS_BYTE
+                bytes,
+                BASS.BASS_POS_BYTE or BASSmix.BASS_POS_MIXER_RESET
             )
             currentPositionMs = positionMs
         }
@@ -481,8 +472,8 @@ class BassPlayerAdapter(
 
     /**
      * Crea un stream decodificador BASS para el ítem actual de la playlist
-     * y lo añade al mixer. No reproduce directamente; el mixer se encarga
-     * de la salida de audio.
+     * y lo añade al mixer. Sin PRESCAN para que el inicio sea instantáneo.
+     * No reproduce directamente; el mixer se encarga de la salida de audio.
      */
     private fun createStreamForCurrentItem() {
         if (currentPlaylist.isEmpty() || currentIndex !in currentPlaylist.indices) {
@@ -500,12 +491,12 @@ class BassPlayerAdapter(
             return
         }
 
-        // Crear stream decodificador (no reproduce directamente)
+        // Stream decodificador sin PRESCAN: apertura instantánea
         val handle = BASS.BASS_StreamCreateFile(
             path,
             0,
             0,
-            BASS.BASS_STREAM_DECODE or BASS.BASS_STREAM_PRESCAN
+            BASS.BASS_STREAM_DECODE
         )
 
         if (handle == 0) {
@@ -515,19 +506,13 @@ class BassPlayerAdapter(
         }
 
         currentHandle = handle
-        currentDurationMs = (BASS.BASS_ChannelBytes2Seconds(
-            handle,
-            BASS.BASS_ChannelGetLength(handle, BASS.BASS_POS_BYTE)
-        ) * 1000).toLong()
-        
-        if (currentDurationMs < 0) {
-            currentDurationMs = C.TIME_UNSET
-        }
-        
+        currentDurationMs = lengthMsOf(handle)
         currentPositionMs = 0L
         currentPlaybackState = Player.STATE_READY
+        nextScheduled = false
+        isCrossfading = false
 
-        // Añadir al mixer
+        // Añadir al mixer para salida de audio
         if (mixerHandle != 0) {
             BASSmix.BASS_Mixer_StreamAddChannel(
                 mixerHandle,
@@ -538,50 +523,89 @@ class BassPlayerAdapter(
     }
 
     /**
-     * Programa la siguiente pista para gapless playback.
-     * Usa BASS_Mixer_StreamAddChannelEx con la posición exacta donde
-     * termina la pista actual, garantizando cero silencio entre canciones.
+     * Duración en milisegundos de un stream decodificador,
+     * o [C.TIME_UNSET] si no se puede determinar.
      */
-    private fun scheduleNextTrackForGapless() {
-        if (nextHandle != 0) {
-            BASSmix.BASS_Mixer_ChannelRemove(nextHandle)
-            BASS.BASS_StreamFree(nextHandle)
-            nextHandle = 0
-        }
+    private fun lengthMsOf(handle: Int): Long {
+        val bytes = BASS.BASS_ChannelGetLength(handle, BASS.BASS_POS_BYTE)
+        if (bytes < 0L) return C.TIME_UNSET
+        val ms = (BASS.BASS_ChannelBytes2Seconds(handle, bytes) * 1000.0).toLong()
+        return if (ms < 0L) C.TIME_UNSET else ms
+    }
+
+    /**
+     * Programa la transición a la siguiente pista justo a tiempo.
+     *
+     * Con crossfade activo ([CROSSFADE_MS] > 0): añade la siguiente YA al
+     * mixer con envelope de volumen 0→1 y aplica envelope 1→0 a la actual.
+     * Sin crossfade: añade la siguiente con start RELATIVO en bytes del
+     * mixer equivalente al tiempo restante → gapless exacto.
+     *
+     * @param remainingMs Milisegundos restantes de la pista actual.
+     */
+    private fun scheduleNextForTransition(remainingMs: Long) {
+        nextScheduled = true
 
         val nextIndex = currentIndex + 1
         if (nextIndex >= currentPlaylist.size) {
             return // No hay siguiente pista
         }
 
-        val nextMediaItem = currentPlaylist[nextIndex]
-        val nextPath = nextMediaItem.localConfiguration?.uri?.path
-
+        val nextPath = currentPlaylist[nextIndex].localConfiguration?.uri?.path
         if (nextPath.isNullOrEmpty()) {
             return
         }
 
-        // Crear stream decodificador para la siguiente pista
+        // Stream decodificador sin PRESCAN para la siguiente pista
         val handle = BASS.BASS_StreamCreateFile(
             nextPath,
             0,
             0,
-            BASS.BASS_STREAM_DECODE or BASS.BASS_STREAM_PRESCAN
+            BASS.BASS_STREAM_DECODE
         )
-
         if (handle == 0) {
             return
         }
-
         nextHandle = handle
 
-        // Calcular posición de inicio en bytes del mixer
-        if (mixerHandle != 0 && currentHandle != 0 && currentDurationMs != C.TIME_UNSET) {
-            val mixerPos = BASSmix.BASS_Mixer_ChannelGetPosition(currentHandle, BASS.BASS_POS_BYTE)
-            val currentLenBytes = BASS.BASS_ChannelGetLength(currentHandle, BASS.BASS_POS_BYTE)
-            val remainingBytes = currentLenBytes - mixerPos
-            val startBytes = mixerPos + remainingBytes
+        if (mixerHandle == 0) return
 
+        if (CROSSFADE_MS > 0) {
+            // Crossfade: la siguiente entra YA con fade-in, la actual sale con fade-out
+            BASSmix.BASS_Mixer_StreamAddChannel(
+                mixerHandle,
+                nextHandle,
+                BASSmix.BASS_MIXER_CHAN_AUTOFREE
+            )
+
+            val fadeInBytes = BASS.BASS_ChannelSeconds2Bytes(nextHandle, CROSSFADE_MS / 1000.0)
+            BASSmix.BASS_Mixer_ChannelSetEnvelope(
+                nextHandle,
+                BASSmix.BASS_MIXER_ENV_VOL,
+                arrayOf(
+                    BASSmix.BASS_MIXER_NODE(0, 0.0f),
+                    BASSmix.BASS_MIXER_NODE(fadeInBytes, 1.0f)
+                ),
+                2
+            )
+
+            if (currentHandle != 0) {
+                val fadeOutBytes = BASS.BASS_ChannelSeconds2Bytes(currentHandle, CROSSFADE_MS / 1000.0)
+                BASSmix.BASS_Mixer_ChannelSetEnvelope(
+                    currentHandle,
+                    BASSmix.BASS_MIXER_ENV_VOL,
+                    arrayOf(
+                        BASSmix.BASS_MIXER_NODE(0, 1.0f),
+                        BASSmix.BASS_MIXER_NODE(fadeOutBytes, 0.0f)
+                    ),
+                    2
+                )
+            }
+            isCrossfading = true
+            android.util.Log.d(TAG, "Crossfade started")
+        } else {
+            // Gapless puro: start RELATIVO en bytes del mixer
+            val startBytes = BASS.BASS_ChannelSeconds2Bytes(mixerHandle, remainingMs / 1000.0)
             BASSmix.BASS_Mixer_StreamAddChannelEx(
                 mixerHandle,
                 nextHandle,
@@ -592,7 +616,38 @@ class BassPlayerAdapter(
         }
     }
 
-    /** Libera el stream BASS actual si existe. */
+    /**
+     * Cancela cualquier transición pendiente: retira la siguiente pista
+     * del mixer y libera su stream. El polling la reprogramará cuando
+     * corresponda (después de seeks o cambios de playlist).
+     */
+    private fun cancelPendingNext() {
+        if (nextHandle != 0) {
+            BASSmix.BASS_Mixer_ChannelRemove(nextHandle)
+            BASS.BASS_StreamFree(nextHandle)
+            nextHandle = 0
+        }
+        nextScheduled = false
+        isCrossfading = false
+    }
+
+    /**
+     * Restaura el volumen completo de la pista actual mediante un
+     * envelope de un solo nodo. Se usa al cancelar un crossfade en
+     * curso (por ejemplo, durante un seek).
+     */
+    private fun restoreCurrentVolume() {
+        if (currentHandle != 0) {
+            BASSmix.BASS_Mixer_ChannelSetEnvelope(
+                currentHandle,
+                BASSmix.BASS_MIXER_ENV_VOL,
+                arrayOf(BASSmix.BASS_MIXER_NODE(0, 1.0f)),
+                1
+            )
+        }
+    }
+
+    /** Libera los streams BASS actual y siguiente si existen. */
     private fun releaseCurrentStream() {
         if (currentHandle != 0) {
             BASSmix.BASS_Mixer_ChannelRemove(currentHandle)
@@ -604,6 +659,7 @@ class BassPlayerAdapter(
             BASS.BASS_StreamFree(nextHandle)
             nextHandle = 0
         }
+        nextScheduled = false
         isCrossfading = false
     }
 
@@ -623,7 +679,7 @@ class BassPlayerAdapter(
     }
     
     // =========================================================================
-    // Polling de posición y detección de fin de pista
+    // Polling de posición, transiciones y detección de fin de pista
     // =========================================================================
 
     /** Arranca el ciclo de polling si no estaba activo. */
@@ -644,33 +700,44 @@ class BassPlayerAdapter(
     }
 
     /**
-     * Consulta a BASS la posición actual del canal actual dentro del mixer,
-     * detecta cuándo iniciar crossfade, y publica los cambios al hilo del
-     * Looper del player.
+     * Consulta al mixer la posición y el estado del canal actual,
+     * programa justo a tiempo la transición a la siguiente pista
+     * (crossfade o gapless) y publica los cambios al hilo del Looper
+     * del player.
      */
     private fun updateFromNative() {
-        if (currentHandle == 0) return
+        val handle = currentHandle
+        if (handle == 0) return
 
-        val positionBytes = BASSmix.BASS_Mixer_ChannelGetPosition(currentHandle, BASS.BASS_POS_BYTE)
-        val positionMs = (BASS.BASS_ChannelBytes2Seconds(currentHandle, positionBytes) * 1000).toLong()
-        val active = BASSmix.BASS_Mixer_ChannelIsActive(currentHandle)
+        val positionBytes = BASSmix.BASS_Mixer_ChannelGetPosition(handle, BASS.BASS_POS_BYTE)
+        val positionMs = if (positionBytes >= 0L) {
+            (BASS.BASS_ChannelBytes2Seconds(handle, positionBytes) * 1000.0).toLong()
+        } else {
+            -1L
+        }
+        val active = BASSmix.BASS_Mixer_ChannelIsActive(handle)
 
         handler.post {
-            if (currentHandle == 0) return@post
+            // Si el handle cambió entre la lectura y este post, ignorar
+            if (currentHandle == 0 || currentHandle != handle) return@post
 
             if (positionMs >= 0L) {
                 currentPositionMs = positionMs
             }
 
-            val previousState = currentPlaybackState
-
-            // Detectar crossfade
-            if (currentDurationMs != C.TIME_UNSET && !isCrossfading && CROSSFADE_MS > 0) {
-                val remainingMs = currentDurationMs - currentPositionMs
-                if (remainingMs <= CROSSFADE_MS && remainingMs > 0) {
-                    startCrossfade()
+            // Programación justo a tiempo de la transición
+            if (!nextScheduled &&
+                currentPlayWhenReady &&
+                currentDurationMs != C.TIME_UNSET
+            ) {
+                val threshold = if (CROSSFADE_MS > 0) CROSSFADE_MS else GAPLESS_SCHEDULE_MS
+                val remaining = currentDurationMs - currentPositionMs
+                if (remaining in 1..threshold) {
+                    scheduleNextForTransition(remaining)
                 }
             }
+
+            val previousState = currentPlaybackState
 
             when (active) {
                 BASS.BASS_ACTIVE_PLAYING -> {
@@ -683,6 +750,10 @@ class BassPlayerAdapter(
                 }
                 BASS.BASS_ACTIVE_STALLED -> {
                     currentPlaybackState = Player.STATE_BUFFERING
+                }
+                BASSmix.BASS_ACTIVE_WAITING, BASSmix.BASS_ACTIVE_QUEUED -> {
+                    // La siguiente pista espera su turno en el mixer:
+                    // no alterar el estado reportado.
                 }
                 BASS.BASS_ACTIVE_STOPPED -> {
                     // Distingue fin natural de pista vs stop manual
@@ -697,6 +768,7 @@ class BassPlayerAdapter(
                         currentPlaybackState = Player.STATE_IDLE
                     }
                 }
+                else -> { /* Estados desconocidos: ignorar */ }
             }
 
             invalidateState()
@@ -704,66 +776,34 @@ class BassPlayerAdapter(
     }
 
     /**
-     * Inicia el crossfade: aplica envelope de volumen descendente al canal
-     * actual y empieza a reproducir el siguiente canal inmediatamente.
-     */
-    private fun startCrossfade() {
-        if (nextHandle == 0 || isCrossfading) return
-
-        isCrossfading = true
-
-        // Aplicar envelope de fade-out al canal actual
-        val nodes = arrayOf(
-            BASSmix.BASS_MIXER_NODE(0, 1.0f),
-            BASSmix.BASS_MIXER_NODE(
-                BASS.BASS_ChannelSeconds2Bytes(currentHandle, CROSSFADE_MS / 1000.0),
-                0.0f
-            )
-        )
-        BASSmix.BASS_Mixer_ChannelSetEnvelope(
-            currentHandle,
-            BASSmix.BASS_MIXER_ENV_VOL,
-            nodes,
-            nodes.size
-        )
-
-        // El siguiente canal ya está programado para empezar en el momento exacto
-        // (gapless), pero como estamos en crossfade, ya debería estar sonando
-        android.util.Log.d(TAG, "Crossfade started")
-    }
-
-    /**
      * Avanza automáticamente al siguiente ítem de la playlist cuando
-     * termina el actual. Si no hay más ítems, marca el estado como
-     * [Player.STATE_ENDED].
+     * termina el actual. La siguiente pista ya está sonando (crossfade)
+     * o arrancando en el punto exacto (gapless) gracias a la programación
+     * justo a tiempo. Si no hay más ítems, marca [Player.STATE_ENDED].
      */
     private fun onTrackEnded() {
         val nextIndex = currentIndex + 1
         if (nextIndex < currentPlaylist.size) {
-            // El siguiente canal ya está en el mixer (gapless) o se creó en crossfade
             currentIndex = nextIndex
-            
-            // El canal actual se libera automáticamente por BASS_MIXER_CHAN_AUTOFREE
-            // El siguiente canal ya está sonando
-            
-            // Actualizar referencias
-            currentHandle = nextHandle
-            nextHandle = 0
+
+            if (nextHandle != 0) {
+                // La siguiente ya estaba en el mixer: promoverla a actual
+                currentHandle = nextHandle
+                nextHandle = 0
+            } else {
+                // Fallback (transición no llegó a programarse): crear y añadir ya
+                createStreamForCurrentItem()
+            }
+
+            nextScheduled = false
             isCrossfading = false
-            
             currentPositionMs = 0L
             currentDurationMs = if (currentHandle != 0) {
-                (BASS.BASS_ChannelBytes2Seconds(
-                    currentHandle,
-                    BASS.BASS_ChannelGetLength(currentHandle, BASS.BASS_POS_BYTE)
-                ) * 1000).toLong()
+                lengthMsOf(currentHandle)
             } else {
                 C.TIME_UNSET
             }
-            
-            // Programar la siguiente pista para gapless
-            scheduleNextTrackForGapless()
-            
+
             if (currentPlayWhenReady && mixerHandle != 0) {
                 playInternal()
             }
@@ -780,7 +820,7 @@ class BassPlayerAdapter(
 
     companion object {
         private const val TAG = "BassPlayerAdapter"
-        
+
         /** Intervalo del polling de posición en milisegundos. */
         private const val POLLING_INTERVAL_MS = 500L
 
@@ -796,10 +836,17 @@ class BassPlayerAdapter(
 
         /**
          * Duración del crossfade en milisegundos.
-         * 4000ms (4 segundos) es el equilibrio ideal entre un fundido
-         * suave y no mantener dos streams decodificando simultáneamente
-         * más tiempo del necesario.
+         * 4000ms es el equilibrio ideal entre un fundido suave y no
+         * mantener dos streams decodificando simultáneamente más tiempo
+         * del necesario. Con 0 se desactiva y queda gapless puro.
          */
         private const val CROSSFADE_MS = 4000L
+
+        /**
+         * Antelación (ms) con la que se programa la siguiente pista cuando
+         * el crossfade está desactivado, para garantizar gapless sin
+         * pre-cargar archivos al iniciar la reproducción.
+         */
+        private const val GAPLESS_SCHEDULE_MS = 1500L
     }
 }
