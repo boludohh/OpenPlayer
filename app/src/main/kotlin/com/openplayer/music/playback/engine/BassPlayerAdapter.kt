@@ -47,11 +47,17 @@ import kotlin.math.max
  *    `BASS_Mixer_StreamAddChannelEx` usando un start RELATIVO en bytes
  *    del mixer → arranca en el byte exacto donde termina la actual,
  *    sin silencio y sin solapamiento.
- * 4. **Baja latencia**: buffers de salida de BASS reducidos antes de
+ * 4. **Transición de metadatos**: cuando el canal de la pista actual
+ *    termina, BASSmix lo libera (AUTOFREE) y sus lecturas fallan. El
+ *    polling interpreta ese fallo como fin de pista y promueve la
+ *    siguiente pista a actual (índice, handles y duración), de modo que
+ *    notificación y metadatos Media3 coinciden con lo que suena. Si no
+ *    hay siguiente, se marca [Player.STATE_ENDED].
+ * 5. **Baja latencia**: buffers de salida de BASS reducidos antes de
  *    `BASS_Init`, y flush del buffer de reproducción del mixer
  *    (`BASS_POS_MIXER_RESET`) en cada cambio de pista y seek, para que
  *    no suene la cola de la pista anterior.
- * 5. **playWhenReady**: lo controla exclusivamente Media3 vía
+ * 6. **playWhenReady**: lo controla exclusivamente Media3 vía
  *    [handleSetPlayWhenReady]; el polling nunca lo sobrescribe.
  *
  * ## Fuera de su responsabilidad
@@ -697,10 +703,15 @@ class BassPlayerAdapter(
      * programa justo a tiempo la transición gapless a la siguiente
      * pista y publica los cambios al hilo del Looper del player.
      *
+     * Detección de fin de pista: cuando el canal termina, BASSmix lo
+     * libera (AUTOFREE) y tanto la posición como el estado devuelven
+     * error. Ese fallo es la señal fiable de fin: se promueve la
+     * siguiente pista a actual (o se marca STATE_ENDED si no hay),
+     * de modo que la notificación y los metadatos Media3 coinciden
+     * con lo que realmente suena.
+     *
      * IMPORTANTE: este polling NUNCA modifica [currentPlayWhenReady];
-     * ese flag lo controla exclusivamente Media3. Así, al pausar, el
-     * botón de la notificación se queda en play y la barra de progreso
-     * se congela correctamente.
+     * ese flag lo controla exclusivamente Media3.
      */
     private fun updateFromNative() {
         val handle = currentHandle
@@ -722,8 +733,16 @@ class BassPlayerAdapter(
                 currentPositionMs = positionMs
             }
 
+            val previousState = currentPlaybackState
+
+            // Canal terminado y liberado por AUTOFREE: las lecturas fallan
+            val channelEnded = positionMs < 0L ||
+                active == CHANNEL_ERROR ||
+                active == BASS.BASS_ACTIVE_STOPPED
+
             // Programación justo a tiempo de la transición gapless
             if (!nextScheduled &&
+                !channelEnded &&
                 currentPlayWhenReady &&
                 currentDurationMs != C.TIME_UNSET
             ) {
@@ -733,34 +752,28 @@ class BassPlayerAdapter(
                 }
             }
 
-            val previousState = currentPlaybackState
-
-            when (active) {
-                BASS.BASS_ACTIVE_PLAYING, BASS.BASS_ACTIVE_PAUSED -> {
-                    // Solo estado; playWhenReady lo decide Media3
-                    currentPlaybackState = Player.STATE_READY
-                }
-                BASS.BASS_ACTIVE_STALLED -> {
-                    currentPlaybackState = Player.STATE_BUFFERING
-                }
-                BASSmix.BASS_ACTIVE_WAITING, BASSmix.BASS_ACTIVE_QUEUED -> {
-                    // La siguiente pista espera su turno en el mixer:
-                    // no alterar el estado reportado.
-                }
-                BASS.BASS_ACTIVE_STOPPED -> {
-                    // Distingue fin natural de pista vs stop manual
-                    if (currentDurationMs != C.TIME_UNSET &&
-                        currentPositionMs >= currentDurationMs - END_THRESHOLD_MS &&
-                        previousState == Player.STATE_READY
-                    ) {
-                        onTrackEnded()
-                    } else if (previousState != Player.STATE_IDLE &&
-                        previousState != Player.STATE_ENDED
-                    ) {
-                        currentPlaybackState = Player.STATE_IDLE
+            if (channelEnded &&
+                previousState != Player.STATE_IDLE &&
+                previousState != Player.STATE_ENDED
+            ) {
+                // Fin de pista: promover la siguiente (ya en el mixer por
+                // el gapless) o marcar STATE_ENDED si no hay más pistas.
+                onTrackEnded()
+            } else if (!channelEnded) {
+                when (active) {
+                    BASS.BASS_ACTIVE_PLAYING, BASS.BASS_ACTIVE_PAUSED -> {
+                        // Solo estado; playWhenReady lo decide Media3
+                        currentPlaybackState = Player.STATE_READY
                     }
+                    BASS.BASS_ACTIVE_STALLED -> {
+                        currentPlaybackState = Player.STATE_BUFFERING
+                    }
+                    BASSmix.BASS_ACTIVE_WAITING, BASSmix.BASS_ACTIVE_QUEUED -> {
+                        // La siguiente pista espera su turno en el mixer:
+                        // no alterar el estado reportado.
+                    }
+                    else -> { /* Estados desconocidos: ignorar */ }
                 }
-                else -> { /* Estados desconocidos: ignorar */ }
             }
 
             invalidateState()
@@ -770,7 +783,8 @@ class BassPlayerAdapter(
     /**
      * Avanza automáticamente al siguiente ítem de la playlist cuando
      * termina el actual. La siguiente pista ya está arrancando en el
-     * punto exacto gracias a la programación gapless justo a tiempo.
+     * punto exacto gracias a la programación gapless justo a tiempo;
+     * aquí solo se promocionan las referencias y metadatos.
      * Si no hay más ítems, marca [Player.STATE_ENDED].
      */
     private fun onTrackEnded() {
@@ -815,13 +829,6 @@ class BassPlayerAdapter(
         /** Intervalo del polling de posición en milisegundos. */
         private const val POLLING_INTERVAL_MS = 500L
 
-        /**
-         * Umbral para considerar que una pista terminó: si la
-         * posición está a menos de este valor del final y el estado
-         * pasa a STOPPED, se considera fin natural.
-         */
-        private const val END_THRESHOLD_MS = 500L
-
         /** Sample rate por defecto para inicializar BASS. */
         private const val DEFAULT_SAMPLE_RATE = 44100
 
@@ -846,5 +853,11 @@ class BassPlayerAdapter(
          * total de salida.
          */
         private const val UPDATE_PERIOD_MS = 20
+
+        /**
+         * Valor que devuelven las funciones de estado de BASSmix cuando
+         * el handle ya fue liberado (canal terminado con AUTOFREE).
+         */
+        private const val CHANNEL_ERROR = -1
     }
 }
