@@ -21,7 +21,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.openplayer.music.data.media.AudioRepository
 import com.openplayer.music.ui.components.BottomNavigationPanel
-import com.openplayer.music.ui.components.SearchBar
+import com.openplayer.music.ui.components.TopActionBar
 import com.openplayer.music.ui.screens.albums.AlbumsScreen
 import com.openplayer.music.ui.screens.artists.ArtistsScreen
 import com.openplayer.music.ui.screens.home.HomeScreen
@@ -41,10 +41,10 @@ import com.openplayer.music.ui.screens.songs.SongsScreen
  * Características:
  * - Navegación entre 5 pestañas: Home, Songs, Albums, Artists, Playlists
  * - Transición fade entre pantallas (300ms)
- * - Barra de búsqueda global visible en las 5 pestañas, anclada arriba
+ * - Barra de acción superior con iconos de menú y búsqueda
  * - Panel inferior siempre visible con animación de elevación en icono activo
  * - Padding inferior de 130dp para no ocultar contenido bajo el panel
- * - Padding superior de 60dp para no ocultar contenido bajo la barra de búsqueda
+ * - Padding superior de 40dp para no ocultar contenido bajo la barra de acción
  * - StatusBarsPadding aplicado al contenedor raíz para que el contenido no
  *   quede detrás de la barra de estado del sistema.
  */
@@ -60,7 +60,7 @@ fun MainScreen(audioRepository: AudioRepository) {
             .statusBarsPadding() // Reserva el espacio de la barra de estado una sola vez
     ) {
         // Contenido principal con transición fade entre pantallas
-        // Padding top = 60dp (altura de la barra de búsqueda)
+        // Padding top = 40dp (altura de la barra de acción superior)
         // Padding bottom = 130dp (altura del panel de navegación inferior)
         AnimatedContent(
             targetState = selectedTab,
@@ -71,7 +71,7 @@ fun MainScreen(audioRepository: AudioRepository) {
             label = "screenTransition",
             modifier = Modifier
                 .fillMaxSize()
-                .padding(top = 60.dp, bottom = 130.dp)
+                .padding(top = 40.dp, bottom = 130.dp)
         ) { tab ->
             when (tab) {
                 NavTab.HOME -> HomeScreen()
@@ -82,12 +82,9 @@ fun MainScreen(audioRepository: AudioRepository) {
             }
         }
 
-        // Barra de búsqueda global (visible en las 5 pestañas)
-        // Márgenes: start = 60dp (reservado para icono futuro), end = 20dp
-        SearchBar(
-            modifier = Modifier
-                .align(Alignment.TopStart)
-                .padding(start = 60.dp, end = 20.dp)
+        // Barra de acción superior con iconos de menú y búsqueda
+        TopActionBar(
+            modifier = Modifier.align(Alignment.TopStart)
         )
 
         // Panel de navegación inferior con estado compartido

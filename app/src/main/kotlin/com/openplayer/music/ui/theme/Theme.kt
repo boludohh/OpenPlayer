@@ -33,6 +33,17 @@ val LocalNavIconActiveColor = compositionLocalOf { Color.Black }
  */
 val LocalNavIconInactiveColor = compositionLocalOf { Color.Gray }
 
+/**
+ * Color para iconos de la barra superior (menú y búsqueda).
+ * Se provee mediante CompositionLocal para acceso global según el tema.
+ *
+ * Valores:
+ * - Claro: #1A1A1A
+ * - Oscuro: #F5F5F5
+ * - AMOLED: #E5E5E5
+ */
+val LocalTopBarIconColor = compositionLocalOf { Color.Black }
+
 private val LightColors = lightColorScheme(
     primary = LightPrimary,
     onPrimary = LightOnPrimary,
@@ -161,10 +172,17 @@ fun OpenPlayerTheme(
         ThemeMode.AMOLED -> AmoledNavIconInactive
     }
 
+    val topBarIconColor = when (themeMode) {
+        ThemeMode.LIGHT -> LightTopBarIcon
+        ThemeMode.DARK -> DarkTopBarIcon
+        ThemeMode.AMOLED -> AmoledTopBarIcon
+    }
+
     CompositionLocalProvider(
         LocalFloatingIconColor provides floatingIconColor,
         LocalNavIconActiveColor provides navIconActiveColor,
-        LocalNavIconInactiveColor provides navIconInactiveColor
+        LocalNavIconInactiveColor provides navIconInactiveColor,
+        LocalTopBarIconColor provides topBarIconColor
     ) {
         MaterialTheme(
             colorScheme = colorScheme,

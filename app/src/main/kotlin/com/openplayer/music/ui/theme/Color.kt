@@ -38,6 +38,9 @@ val LightSunIconColor = Color(0xFF1A1A1A)
 val LightNavIconActive = Color(0xFF1A1A1A)
 val LightNavIconInactive = Color(0xFFA3A3A3)
 
+// Colores para iconos de la barra superior
+val LightTopBarIcon = Color(0xFF1A1A1A)
+
 // ----- Tema Oscuro -----
 val DarkPrimary = Color(0xFFF2B8B0)
 val DarkOnPrimary = Color(0xFF601410)
@@ -74,6 +77,9 @@ val DarkMoonIconColor = Color(0xFFF5F5F5)
 val DarkNavIconActive = Color(0xFFF5F5F5)
 val DarkNavIconInactive = Color(0xFF8C8C8C)
 
+// Colores para iconos de la barra superior
+val DarkTopBarIcon = Color(0xFFF5F5F5)
+
 // ----- Tema AMOLED (negro puro) -----
 val AmoledPrimary = Color(0xFFF2B8B0)
 val AmoledOnPrimary = Color(0xFF601410)
@@ -109,3 +115,6 @@ val AmoledMoonIconColor = Color(0xFFE5E5E5)
 // Colores para iconos de navegación
 val AmoledNavIconActive = Color(0xFFE5E5E5)
 val AmoledNavIconInactive = Color(0xFF737373)
+
+// Colores para iconos de la barra superior
+val AmoledTopBarIcon = Color(0xFFE5E5E5)
