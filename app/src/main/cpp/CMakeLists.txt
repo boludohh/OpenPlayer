@@ -24,35 +24,19 @@ set_target_properties(taglib PROPERTIES
 )
 
 # ==========================================================================
-# BASS Audio Library (IMPORTED)
+# BASS Audio Library y add-ons (solo empaquetado, no enlace)
+# Los .so se empaquetan automáticamente por AGP al estar en jniLibs
+# o en el directorio de CMake. No se enlazan porque BASS ahora se usa
+# desde los wrappers oficiales de Java (BASS.java, BASSmix.java).
 # ==========================================================================
-set(BASS_SO_PATH "${CMAKE_CURRENT_SOURCE_DIR}/bass/${ANDROID_ABI}/libbass.so")
 
-if (NOT EXISTS "${BASS_SO_PATH}")
-    message(FATAL_ERROR
-        "No se encontró libbass.so para ${ANDROID_ABI} en: ${BASS_SO_PATH}\n"
-        "Descargá BASS 2.4.18.3 desde https://www.un4seen.com/bass.html y "
-        "colocá el libbass.so correspondiente en app/src/main/cpp/bass/${ANDROID_ABI}/"
-    )
-endif()
-
-add_library(bass SHARED IMPORTED)
-set_target_properties(bass PROPERTIES
-    IMPORTED_LOCATION "${BASS_SO_PATH}"
-)
-
-# Nuestra librería nativa
+# Nuestra librería nativa (solo TagLib, sin bassglue)
 add_library(openplayeraudio SHARED
     openplayeraudio.cpp
-    bassglue/bassglue.c
 )
 
 # ==========================================================================
 # Headers de TagLib
-# ==========================================================================
-# Estructura: taglib-headers/taglib/...
-# - taglib-headers/ permite includes como <taglib/fileref.h>
-# - taglib-headers/taglib/ y subdirectorios permiten includes internos
 # ==========================================================================
 target_include_directories(openplayeraudio PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/taglib-headers
@@ -67,21 +51,19 @@ target_include_directories(openplayeraudio PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/taglib-headers/taglib/ogg/vorbis
     ${CMAKE_CURRENT_SOURCE_DIR}/taglib-headers/taglib/ogg/opus
     ${CMAKE_CURRENT_SOURCE_DIR}/taglib-headers/taglib/mp4
-    ${CMAKE_CURRENT_SOURCE_DIR}/bassglue
 )
 
 # Buscar zlib del NDK (requerido por TagLib en runtime)
 find_library(ZLIB_LIB z)
 
-# Buscar liblog de Android (para __android_log_print en bassglue.c)
+# Buscar liblog de Android (para __android_log_print)
 find_library(LOG_LIB log)
 
-# Enlazar TagLib precompilado, zlib, log y BASS
+# Enlazar solo TagLib precompilado, zlib y log (sin bass)
 target_link_libraries(openplayeraudio PRIVATE
     taglib
     ${ZLIB_LIB}
     ${LOG_LIB}
-    bass
 )
 
 # Flags de compilación

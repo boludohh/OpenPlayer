@@ -11,7 +11,6 @@ import androidx.media3.common.SimpleBasePlayer
 import androidx.media3.common.util.UnstableApi
 import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
-import com.openplayer.music.native.BassNative
 import com.un4seen.bass.BASS
 import com.un4seen.bass.BASSmix
 import kotlinx.coroutines.CoroutineScope
@@ -30,15 +29,15 @@ import kotlin.math.max
  * Extiende [SimpleBasePlayer] para reutilizar la implementación base
  * de la interfaz [Player] y solo tener que sobrescribir los handlers
  * que traducen cada comando Media3 a llamadas equivalentes de BASS
- * ([BassNative] para init/plugins) y de los wrappers oficiales
- * [BASS] / [BASSmix] para streams y mixer.
+ * usando los wrappers oficiales [BASS] y [BASSmix].
  *
  * ## Arquitectura de reproducción con BASSmix
  *
  * 1. **Mixer stream**: se crea al inicializar y es el único stream con
  *    salida de audio al dispositivo. Si el init falla (device de audio
  *    no listo en instalaciones frescas), [ensureBassReady] lo reintenta
- *    en cada play y re-vincula los streams existentes.
+ *    en cada play con una cadena de fallback (default → OpenSL ES → AudioTrack)
+ *    y re-vincula los streams existentes.
  * 2. **Streams decodificadores**: cada canción se crea con
  *    `BASS_STREAM_DECODE` (sin PRESCAN, apertura instantánea) y se añade
  *    al mixer, no se reproduce directamente.
@@ -51,12 +50,10 @@ import kotlin.math.max
  *    termina, BASSmix lo libera (AUTOFREE) y sus lecturas fallan. El
  *    polling interpreta ese fallo como fin de pista y promueve la
  *    siguiente pista a actual (índice, handles y duración), de modo que
- *    notificación y metadatos Media3 coinciden con lo que suena. Si no
- *    hay siguiente, se marca [Player.STATE_ENDED].
+ *    notificación y metadatos Media3 coinciden con lo que suena.
  * 5. **Baja latencia**: buffers de salida de BASS reducidos antes de
  *    `BASS_Init`, y flush del buffer de reproducción del mixer
- *    (`BASS_POS_MIXER_RESET`) en cada cambio de pista y seek, para que
- *    no suene la cola de la pista anterior.
+ *    (`BASS_POS_MIXER_RESET`) en cada cambio de pista y seek.
  * 6. **playWhenReady**: lo controla exclusivamente Media3 vía
  *    [handleSetPlayWhenReady]; el polling nunca lo sobrescribe.
  *
@@ -88,8 +85,7 @@ class BassPlayerAdapter(
 
     /**
      * True si la transición de la pista actual ya fue programada,
-     * o si ya se decidió que no hay siguiente. Evita reprogramar
-     * en cada ciclo de polling.
+     * o si ya se decidió que no hay siguiente.
      */
     private var nextScheduled: Boolean = false
 
@@ -138,28 +134,80 @@ class BassPlayerAdapter(
 
     init {
         // Buffers de salida reducidos ANTES de BASS_Init: menos latencia
-        // en cada arranque de reproducción.
         configureLowLatency()
 
-        // Inicializa BASS con sample rate estándar. BassNative usa
-        // System.loadLibrary que es idempotente; la inicialización
-        // del engine también lo es internamente.
-        bassInitialized = BassNative.init(DEFAULT_SAMPLE_RATE)
+        // Inicializa BASS con cadena de fallback de device de audio
+        bassInitialized = initBassWithFallback()
 
         // Cargar plugins FLAC, Opus y AAC después de inicializar BASS
         if (bassInitialized) {
-            BassNative.loadPlugins(nativeLibDir)
+            loadPlugins()
             createMixer()
         }
     }
 
     /**
-     * Reduce los buffers de salida de BASS antes de [BassNative.init].
+     * Reduce los buffers de salida de BASS antes de [BASS.BASS_Init].
      * Debe llamarse antes de inicializar el engine para que aplique.
      */
     private fun configureLowLatency() {
         BASS.BASS_SetConfig(BASS.BASS_CONFIG_BUFFER, OUTPUT_BUFFER_MS)
         BASS.BASS_SetConfig(BASS.BASS_CONFIG_UPDATEPERIOD, UPDATE_PERIOD_MS)
+    }
+
+    /**
+     * Inicializa BASS con una cadena de fallback de dispositivos de audio.
+     * Si el dispositivo por defecto falla (típico en instalaciones frescas
+     * o cuando el HAL de audio no está listo), intenta con OpenSL ES y
+     * luego con AudioTrack.
+     *
+     * @return true si BASS se inicializó correctamente con algún dispositivo.
+     */
+    private fun initBassWithFallback(): Boolean {
+        // Intento 1: dispositivo por defecto (AAudio en Android moderno)
+        if (BASS.BASS_Init(-1, DEFAULT_SAMPLE_RATE, 0)) {
+            android.util.Log.i(TAG, "BASS_Init OK with default device")
+            return true
+        }
+        android.util.Log.w(TAG, "BASS_Init failed with default device, error: ${BASS.BASS_ErrorGetCode()}")
+
+        // Liberar estado parcial antes del siguiente intento
+        BASS.BASS_Free()
+
+        // Intento 2: OpenSL ES
+        if (BASS.BASS_Init(-1, DEFAULT_SAMPLE_RATE, BASS.BASS_DEVICE_OPENSLES)) {
+            android.util.Log.i(TAG, "BASS_Init OK with OpenSL ES")
+            return true
+        }
+        android.util.Log.w(TAG, "BASS_Init failed with OpenSL ES, error: ${BASS.BASS_ErrorGetCode()}")
+
+        BASS.BASS_Free()
+
+        // Intento 3: AudioTrack (fallback más básico)
+        if (BASS.BASS_Init(-1, DEFAULT_SAMPLE_RATE, BASS.BASS_DEVICE_AUDIOTRACK)) {
+            android.util.Log.i(TAG, "BASS_Init OK with AudioTrack")
+            return true
+        }
+        android.util.Log.e(TAG, "BASS_Init failed with AudioTrack, error: ${BASS.BASS_ErrorGetCode()}")
+
+        return false
+    }
+
+    /**
+     * Carga los plugins de BASS (FLAC, Opus y AAC) desde el directorio
+     * de librerías nativas de Android.
+     */
+    private fun loadPlugins() {
+        val plugins = listOf("libbassflac.so", "libbassopus.so", "libbass_aac.so")
+        for (plugin in plugins) {
+            val path = "$nativeLibDir/$plugin"
+            val handle = BASS.BASS_PluginLoad(path, 0)
+            if (handle == 0) {
+                android.util.Log.w(TAG, "Failed to load $plugin, error: ${BASS.BASS_ErrorGetCode()}")
+            } else {
+                android.util.Log.i(TAG, "$plugin loaded successfully")
+            }
+        }
     }
 
     /**
@@ -179,7 +227,7 @@ class BassPlayerAdapter(
             android.util.Log.i(TAG, "Mixer created successfully")
         }
     }
-
+    
     // =========================================================================
     // Estado reportado a Media3
     // =========================================================================
@@ -254,26 +302,13 @@ class BassPlayerAdapter(
     /**
      * Actualiza la playlist interna del adapter sin interrumpir la
      * reproducción actual si la canción sigue existiendo.
-     *
-     * Este método es llamado por PlaybackService cuando detecta cambios
-     * en la biblioteca musical. Se ejecuta en el hilo del Looper del
-     * player para garantizar thread safety.
-     *
-     * Si la canción actual sigue existiendo se mantiene la reproducción
-     * y se cancela cualquier transición pendiente (el polling la
-     * reprograma con la playlist nueva). Si fue eliminada, se libera el
-     * stream y se resetea el estado.
-     *
-     * @param newPlaylist Nueva lista de MediaItem que reemplaza la actual.
      */
     fun updatePlaylist(newPlaylist: List<MediaItem>) {
         handler.post {
-            // Identificar la canción actual por su mediaId
             val currentMediaId = if (currentIndex in currentPlaylist.indices) {
                 currentPlaylist[currentIndex].mediaId
             } else null
 
-            // Actualizar la playlist
             currentPlaylist = newPlaylist
 
             if (currentMediaId != null) {
@@ -281,8 +316,6 @@ class BassPlayerAdapter(
 
                 if (newIndex >= 0) {
                     currentIndex = newIndex
-                    // Cancelar transición pendiente: la siguiente canción
-                    // pudo haber cambiado; el polling la reprograma.
                     cancelPendingNext()
                 } else {
                     releaseCurrentStream()
@@ -300,7 +333,7 @@ class BassPlayerAdapter(
             invalidateState()
         }
     }
-    
+
     // =========================================================================
     // Handlers de comandos Media3
     // =========================================================================
@@ -318,8 +351,6 @@ class BassPlayerAdapter(
         if (currentPlaylist.isNotEmpty()) {
             createStreamForCurrentItem()
             if (currentHandle != 0) {
-                // Coloca la posición inicial y hace flush del buffer del
-                // mixer para que no suene nada de la pista anterior.
                 val start = startPositionMs.coerceAtLeast(0L)
                 val bytes = BASS.BASS_ChannelSeconds2Bytes(currentHandle, start / 1000.0)
                 BASSmix.BASS_Mixer_ChannelSetPosition(
@@ -329,7 +360,6 @@ class BassPlayerAdapter(
                 )
                 currentPositionMs = start
             }
-            // La transición gapless la programa el polling justo a tiempo.
         }
 
         invalidateState()
@@ -421,14 +451,12 @@ class BassPlayerAdapter(
         positionMs: Long,
         seekCommand: Int
     ): ListenableFuture<*> {
-        // Cambio de ítem si es necesario
         if (mediaItemIndex != C.INDEX_UNSET && mediaItemIndex != currentIndex) {
             currentIndex = mediaItemIndex.coerceIn(0, max(0, currentPlaylist.size - 1))
             releaseCurrentStream()
             createStreamForCurrentItem()
 
             if (currentHandle != 0) {
-                // Flush del buffer del mixer: sin cola de la pista anterior
                 BASSmix.BASS_Mixer_ChannelSetPosition(
                     currentHandle,
                     0,
@@ -436,17 +464,12 @@ class BassPlayerAdapter(
                 )
             }
 
-            // Si el player estaba reproduciendo, asegurar mixer activo y polling
             if (currentPlayWhenReady && currentHandle != 0) {
                 playInternal()
             }
         } else if (positionMs != C.TIME_UNSET && currentHandle != 0) {
-            // Seek dentro del ítem actual: cancelar transición pendiente
-            // (su posición de inicio quedó invalidada); el polling la
-            // reprogramará justo a tiempo.
             cancelPendingNext()
 
-            // Seek correcto dentro del mixer: flush del buffer incluido
             val bytes = BASS.BASS_ChannelSeconds2Bytes(currentHandle, positionMs / 1000.0)
             BASSmix.BASS_Mixer_ChannelSetPosition(
                 currentHandle,
@@ -481,13 +504,10 @@ class BassPlayerAdapter(
         }
         handler.removeCallbacksAndMessages(null)
         pollingScope.cancel()
-        // No liberamos BASS global aquí: el PlaybackService lo hará
-        // cuando destruya la sesión, para permitir cambio de motor
-        // sin reinicializar la biblioteca.
         invalidateState()
         return Futures.immediateVoidFuture()
     }
-
+    
     // =========================================================================
     // Lógica interna de BASS con BASSmix
     // =========================================================================
@@ -495,8 +515,9 @@ class BassPlayerAdapter(
     /**
      * Garantiza que BASS y el mixer estén operativos. Si el init original
      * falló (device de audio no listo, típico en instalaciones frescas),
-     * reintenta la inicialización y re-vincula el stream actual al mixer
-     * nuevo. Se llama en cada play para que el adapter se auto-repare.
+     * reintenta la inicialización con la cadena de fallback y re-vincula
+     * el stream actual al mixer nuevo. Se llama en cada play para que el
+     * adapter se auto-repare.
      *
      * @return true si el mixer quedó operativo.
      */
@@ -504,15 +525,15 @@ class BassPlayerAdapter(
         if (mixerHandle != 0) return true
 
         if (!bassInitialized) {
-            bassInitialized = BassNative.init(DEFAULT_SAMPLE_RATE)
+            configureLowLatency()
+            bassInitialized = initBassWithFallback()
             if (bassInitialized) {
-                BassNative.loadPlugins(nativeLibDir)
+                loadPlugins()
             }
         }
 
         if (bassInitialized && mixerHandle == 0) {
             createMixer()
-            // Re-vincular streams que quedaron sin mixer por el fallo inicial
             if (mixerHandle != 0 && currentHandle != 0) {
                 BASSmix.BASS_Mixer_StreamAddChannel(
                     mixerHandle,
@@ -528,7 +549,6 @@ class BassPlayerAdapter(
     /**
      * Crea un stream decodificador BASS para el ítem actual de la playlist
      * y lo añade al mixer. Sin PRESCAN para que el inicio sea instantáneo.
-     * No reproduce directamente; el mixer se encarga de la salida de audio.
      */
     private fun createStreamForCurrentItem() {
         if (currentPlaylist.isEmpty() || currentIndex !in currentPlaylist.indices) {
@@ -546,7 +566,6 @@ class BassPlayerAdapter(
             return
         }
 
-        // Stream decodificador sin PRESCAN: apertura instantánea
         val handle = BASS.BASS_StreamCreateFile(
             path,
             0,
@@ -566,7 +585,6 @@ class BassPlayerAdapter(
         currentPlaybackState = Player.STATE_READY
         nextScheduled = false
 
-        // Añadir al mixer para salida de audio
         if (mixerHandle != 0) {
             BASSmix.BASS_Mixer_StreamAddChannel(
                 mixerHandle,
@@ -589,18 +607,13 @@ class BassPlayerAdapter(
 
     /**
      * Programa la siguiente pista para gapless puro, justo a tiempo.
-     * Añade el stream decodificador de la siguiente canción al mixer con
-     * un start RELATIVO en bytes del mixer equivalente al tiempo restante,
-     * de modo que arranca exactamente cuando termina la actual.
-     *
-     * @param remainingMs Milisegundos restantes de la pista actual.
      */
     private fun scheduleNextGapless(remainingMs: Long) {
         nextScheduled = true
 
         val nextIndex = currentIndex + 1
         if (nextIndex >= currentPlaylist.size) {
-            return // No hay siguiente pista
+            return
         }
 
         val nextPath = currentPlaylist[nextIndex].localConfiguration?.uri?.path
@@ -608,7 +621,6 @@ class BassPlayerAdapter(
             return
         }
 
-        // Stream decodificador sin PRESCAN para la siguiente pista
         val handle = BASS.BASS_StreamCreateFile(
             nextPath,
             0,
@@ -622,7 +634,6 @@ class BassPlayerAdapter(
 
         if (mixerHandle == 0) return
 
-        // Start RELATIVO en bytes del mixer: arranca al terminar la actual
         val startBytes = BASS.BASS_ChannelSeconds2Bytes(mixerHandle, remainingMs / 1000.0)
         BASSmix.BASS_Mixer_StreamAddChannelEx(
             mixerHandle,
@@ -634,9 +645,7 @@ class BassPlayerAdapter(
     }
 
     /**
-     * Cancela cualquier transición pendiente: retira la siguiente pista
-     * del mixer y libera su stream. El polling la reprogramará cuando
-     * corresponda (después de seeks o cambios de playlist).
+     * Cancela cualquier transición pendiente.
      */
     private fun cancelPendingNext() {
         if (nextHandle != 0) {
@@ -676,7 +685,7 @@ class BassPlayerAdapter(
         BASS.BASS_ChannelPause(mixerHandle)
         currentPlaybackState = Player.STATE_READY
     }
-    
+
     // =========================================================================
     // Polling de posición, transiciones y detección de fin de pista
     // =========================================================================
@@ -702,16 +711,6 @@ class BassPlayerAdapter(
      * Consulta al mixer la posición y el estado del canal actual,
      * programa justo a tiempo la transición gapless a la siguiente
      * pista y publica los cambios al hilo del Looper del player.
-     *
-     * Detección de fin de pista: cuando el canal termina, BASSmix lo
-     * libera (AUTOFREE) y tanto la posición como el estado devuelven
-     * error. Ese fallo es la señal fiable de fin: se promueve la
-     * siguiente pista a actual (o se marca STATE_ENDED si no hay),
-     * de modo que la notificación y los metadatos Media3 coinciden
-     * con lo que realmente suena.
-     *
-     * IMPORTANTE: este polling NUNCA modifica [currentPlayWhenReady];
-     * ese flag lo controla exclusivamente Media3.
      */
     private fun updateFromNative() {
         val handle = currentHandle
@@ -726,7 +725,6 @@ class BassPlayerAdapter(
         val active = BASSmix.BASS_Mixer_ChannelIsActive(handle)
 
         handler.post {
-            // Si el handle cambió entre la lectura y este post, ignorar
             if (currentHandle == 0 || currentHandle != handle) return@post
 
             if (positionMs >= 0L) {
@@ -735,12 +733,10 @@ class BassPlayerAdapter(
 
             val previousState = currentPlaybackState
 
-            // Canal terminado y liberado por AUTOFREE: las lecturas fallan
             val channelEnded = positionMs < 0L ||
                 active == CHANNEL_ERROR ||
                 active == BASS.BASS_ACTIVE_STOPPED
 
-            // Programación justo a tiempo de la transición gapless
             if (!nextScheduled &&
                 !channelEnded &&
                 currentPlayWhenReady &&
@@ -756,21 +752,17 @@ class BassPlayerAdapter(
                 previousState != Player.STATE_IDLE &&
                 previousState != Player.STATE_ENDED
             ) {
-                // Fin de pista: promover la siguiente (ya en el mixer por
-                // el gapless) o marcar STATE_ENDED si no hay más pistas.
                 onTrackEnded()
             } else if (!channelEnded) {
                 when (active) {
                     BASS.BASS_ACTIVE_PLAYING, BASS.BASS_ACTIVE_PAUSED -> {
-                        // Solo estado; playWhenReady lo decide Media3
                         currentPlaybackState = Player.STATE_READY
                     }
                     BASS.BASS_ACTIVE_STALLED -> {
                         currentPlaybackState = Player.STATE_BUFFERING
                     }
                     BASSmix.BASS_ACTIVE_WAITING, BASSmix.BASS_ACTIVE_QUEUED -> {
-                        // La siguiente pista espera su turno en el mixer:
-                        // no alterar el estado reportado.
+                        // La siguiente pista espera su turno en el mixer
                     }
                     else -> { /* Estados desconocidos: ignorar */ }
                 }
@@ -782,10 +774,7 @@ class BassPlayerAdapter(
 
     /**
      * Avanza automáticamente al siguiente ítem de la playlist cuando
-     * termina el actual. La siguiente pista ya está arrancando en el
-     * punto exacto gracias a la programación gapless justo a tiempo;
-     * aquí solo se promocionan las referencias y metadatos.
-     * Si no hay más ítems, marca [Player.STATE_ENDED].
+     * termina el actual.
      */
     private fun onTrackEnded() {
         val nextIndex = currentIndex + 1
@@ -793,11 +782,9 @@ class BassPlayerAdapter(
             currentIndex = nextIndex
 
             if (nextHandle != 0) {
-                // La siguiente ya estaba en el mixer: promoverla a actual
                 currentHandle = nextHandle
                 nextHandle = 0
             } else {
-                // Fallback (transición no llegó a programarse): crear y añadir ya
                 createStreamForCurrentItem()
             }
 
@@ -834,23 +821,17 @@ class BassPlayerAdapter(
 
         /**
          * Antelación (ms) con la que se programa la siguiente pista para
-         * garantizar gapless sin pre-cargar archivos al iniciar la
-         * reproducción. 2000ms da margen de sobra para abrir el stream
-         * decodificador incluso en archivos pesados.
+         * garantizar gapless sin pre-cargar archivos al iniciar la reproducción.
          */
         private const val GAPLESS_SCHEDULE_MS = 2000L
 
         /**
-         * Buffer de salida de BASS en milisegundos (se aplica antes de
-         * BASS_Init). Valores bajos reducen la latencia de arranque y de
-         * cada cambio de pista; 100ms es seguro en dispositivos modernos.
+         * Buffer de salida de BASS en milisegundos (se aplica antes de BASS_Init).
          */
         private const val OUTPUT_BUFFER_MS = 100
 
         /**
-         * Periodo de update de BASS en milisegundos (se aplica antes de
-         * BASS_Init). Junto con [OUTPUT_BUFFER_MS] define la latencia
-         * total de salida.
+         * Periodo de update de BASS en milisegundos (se aplica antes de BASS_Init).
          */
         private const val UPDATE_PERIOD_MS = 20
 
