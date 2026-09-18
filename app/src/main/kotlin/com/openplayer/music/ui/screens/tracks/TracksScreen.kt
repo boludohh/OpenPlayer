@@ -98,7 +98,7 @@ fun TracksScreen(
             .background(MaterialTheme.colorScheme.background)
     ) {
         // Texto de conteo de pistas: 15dp de tamaño, 15dp de margen izquierdo,
-        // 6dp de espacio respecto a los iconos superiores
+        // 8dp de espacio respecto a los iconos superiores
         Text(
             text = stringResource(R.string.main_songs_count, songs.size),
             style = MaterialTheme.typography.bodyLarge.copy(fontSize = 15.sp),
@@ -106,10 +106,15 @@ fun TracksScreen(
             textAlign = TextAlign.Start,
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(start = 15.dp, top = 6.dp, end = 15.dp)
+                .padding(start = 15.dp, top = 8.dp, end = 15.dp)
         )
 
-        LazyColumn(modifier = Modifier.fillMaxSize()) {
+        // Lista de pistas con 8dp de separación respecto al texto de conteo
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(top = 8.dp)
+        ) {
             itemsIndexed(songs) { _, song ->
                 SongRow(song = song) {
                     val current = controller ?: return@SongRow
