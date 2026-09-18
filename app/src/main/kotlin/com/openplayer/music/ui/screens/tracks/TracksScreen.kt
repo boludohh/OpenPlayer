@@ -97,8 +97,13 @@ fun TracksScreen(
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
     ) {
-        // Texto de conteo de pistas: 15dp de tamaño, 15dp de margen izquierdo,
-        // 8dp de espacio respecto a los iconos superiores
+        // Texto de conteo de pistas: 15sp de tamaño.
+        // start = 23dp: alineado con el glifo del primer icono de la barra
+        //   superior (15dp de padding del Row + 8dp de centrado del icono
+        //   de 28dp dentro de su área de toque de 44dp).
+        // top = 10dp: la caja del texto queda a 50dp; compensando el leading
+        //   interno de la fuente (~6dp sobre el glifo en línea de 24sp), el
+        //   texto queda ópticamente a 8dp debajo de la base del icono (48dp).
         Text(
             text = stringResource(R.string.main_songs_count, songs.size),
             style = MaterialTheme.typography.bodyLarge.copy(fontSize = 15.sp),
@@ -106,7 +111,7 @@ fun TracksScreen(
             textAlign = TextAlign.Start,
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(start = 15.dp, top = 8.dp, end = 15.dp)
+                .padding(start = 23.dp, top = 10.dp, end = 15.dp)
         )
 
         // Lista de pistas con 8dp de separación respecto al texto de conteo
