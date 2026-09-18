@@ -42,7 +42,7 @@ import com.openplayer.music.ui.theme.LocalNavIconInactiveColor
  *
  * Pestañas disponibles (en orden):
  * 1. Home (Inicio)
- * 2. Songs (Música)
+ * 2. Tracks (Pistas)
  * 3. Albums (Álbumes)
  * 4. Artists (Artistas)
  * 5. Playlists (Listas de reproducción)
@@ -120,7 +120,7 @@ private fun NavIcon(
 
     val (outlineRes, filledRes) = when (tab) {
         NavTab.HOME -> R.drawable.ic_nav_home_outline to R.drawable.ic_nav_home_filled
-        NavTab.SONGS -> R.drawable.ic_nav_music_outline to R.drawable.ic_nav_music_filled
+        NavTab.TRACKS -> R.drawable.ic_nav_music_outline to R.drawable.ic_nav_music_filled
         NavTab.ALBUMS -> R.drawable.ic_nav_albums_outline to R.drawable.ic_nav_albums_filled
         NavTab.ARTISTS -> R.drawable.ic_nav_artists_outline to R.drawable.ic_nav_artists_filled
         NavTab.PLAYLISTS -> R.drawable.ic_nav_playlist_outline to R.drawable.ic_nav_playlist_filled
