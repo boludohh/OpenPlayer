@@ -1,7 +1,7 @@
 <resources>
     <string name="app_name">OpenPlayer</string>
     <string name="main_placeholder">Pantalla principal</string>
-    <string name="main_songs_count">%1$d canciones escaneadas</string>
+    <string name="main_songs_count">%1$d pistas</string>
     <string name="welcome_title">Bienvenido a</string>
     <string name="loading_tagline">Más que un reproductor tradicional</string>
     <string name="start_button">Comenzar</string>
@@ -29,6 +29,7 @@
     <string name="language_ar">Árabe</string>
     <string name="language_fr">Francés</string>
     <string name="home_screen_placeholder">Inicio</string>
+    <string name="tracks_screen_placeholder">Pistas</string>
     <string name="albums_screen_placeholder">Álbumes</string>
     <string name="artists_screen_placeholder">Artistas</string>
     <string name="playlist_screen_placeholder">Listas de reproducción</string>

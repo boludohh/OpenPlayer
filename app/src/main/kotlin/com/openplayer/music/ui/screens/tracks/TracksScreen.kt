@@ -1,4 +1,4 @@
-package com.openplayer.music.ui.screens.songs
+package com.openplayer.music.ui.screens.tracks
 
 import android.content.ComponentName
 import androidx.compose.foundation.background
@@ -25,6 +25,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
@@ -34,12 +35,13 @@ import com.openplayer.music.data.media.CoverRepository
 import com.openplayer.music.data.model.Song
 import com.openplayer.music.playback.service.PlaybackService
 import com.openplayer.music.playback.toMediaItem
+import com.openplayer.music.ui.theme.LocalTracksCountTextColor
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /**
- * Pantalla de canciones de OpenPlayer.
+ * Pantalla de pistas de OpenPlayer.
  *
  * Muestra la lista completa de canciones escaneadas ordenadas por título.
  * Al tocar una canción inicia la reproducción vía MediaController conectado
@@ -50,7 +52,7 @@ import kotlinx.coroutines.withContext
  * La extracción ya se hizo durante el escaneo en [AudioRepository].
  */
 @Composable
-fun SongsScreen(
+fun TracksScreen(
     audioRepository: AudioRepository,
     modifier: Modifier = Modifier
 ) {
@@ -58,6 +60,7 @@ fun SongsScreen(
     val songs by audioRepository.songs.collectAsState(initial = emptyList())
     val coroutineScope = rememberCoroutineScope()
     val coverRepository = remember { CoverRepository(context) }
+    val tracksCountTextColor = LocalTracksCountTextColor.current
 
     // MediaController conectado al PlaybackService
     var controller by remember { mutableStateOf<MediaController?>(null) }
@@ -94,14 +97,16 @@ fun SongsScreen(
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
     ) {
+        // Texto de conteo de pistas: 15dp de tamaño, 15dp de margen izquierdo,
+        // 6dp de espacio respecto a los iconos superiores
         Text(
             text = stringResource(R.string.main_songs_count, songs.size),
-            style = MaterialTheme.typography.headlineMedium,
-            color = MaterialTheme.colorScheme.onBackground,
-            textAlign = TextAlign.Center,
+            style = MaterialTheme.typography.bodyLarge.copy(fontSize = 15.sp),
+            color = tracksCountTextColor,
+            textAlign = TextAlign.Start,
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp)
+                .padding(start = 15.dp, top = 6.dp, end = 15.dp)
         )
 
         LazyColumn(modifier = Modifier.fillMaxSize()) {

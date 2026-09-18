@@ -44,6 +44,17 @@ val LocalNavIconInactiveColor = compositionLocalOf { Color.Gray }
  */
 val LocalTopBarIconColor = compositionLocalOf { Color.Black }
 
+/**
+ * Color para el texto de conteo de pistas en la pantalla de Tracks.
+ * Se provee mediante CompositionLocal para acceso global según el tema.
+ *
+ * Valores:
+ * - Claro: #1A1A1A
+ * - Oscuro: #F5F5F5
+ * - AMOLED: #E5E5E5
+ */
+val LocalTracksCountTextColor = compositionLocalOf { Color.Black }
+
 private val LightColors = lightColorScheme(
     primary = LightPrimary,
     onPrimary = LightOnPrimary,
@@ -178,11 +189,18 @@ fun OpenPlayerTheme(
         ThemeMode.AMOLED -> AmoledTopBarIcon
     }
 
+    val tracksCountTextColor = when (themeMode) {
+        ThemeMode.LIGHT -> LightTracksCountText
+        ThemeMode.DARK -> DarkTracksCountText
+        ThemeMode.AMOLED -> AmoledTracksCountText
+    }
+
     CompositionLocalProvider(
         LocalFloatingIconColor provides floatingIconColor,
         LocalNavIconActiveColor provides navIconActiveColor,
         LocalNavIconInactiveColor provides navIconInactiveColor,
-        LocalTopBarIconColor provides topBarIconColor
+        LocalTopBarIconColor provides topBarIconColor,
+        LocalTracksCountTextColor provides tracksCountTextColor
     ) {
         MaterialTheme(
             colorScheme = colorScheme,

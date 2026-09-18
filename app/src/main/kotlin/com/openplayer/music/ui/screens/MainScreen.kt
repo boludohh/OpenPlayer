@@ -26,7 +26,7 @@ import com.openplayer.music.ui.screens.albums.AlbumsScreen
 import com.openplayer.music.ui.screens.artists.ArtistsScreen
 import com.openplayer.music.ui.screens.home.HomeScreen
 import com.openplayer.music.ui.screens.playlist.PlaylistScreen
-import com.openplayer.music.ui.screens.songs.SongsScreen
+import com.openplayer.music.ui.screens.tracks.TracksScreen
 
 /**
  * Pantalla principal de OpenPlayer.
@@ -39,7 +39,7 @@ import com.openplayer.music.ui.screens.songs.SongsScreen
  * controle la navegación y MainScreen renderice la pantalla correspondiente.
  *
  * Características:
- * - Navegación entre 5 pestañas: Home, Songs, Albums, Artists, Playlists
+ * - Navegación entre 5 pestañas: Home, Tracks, Albums, Artists, Playlists
  * - Transición fade entre pantallas (300ms)
  * - Barra de acción superior con iconos de menú y búsqueda
  * - Panel inferior siempre visible con animación de elevación en icono activo
@@ -75,7 +75,7 @@ fun MainScreen(audioRepository: AudioRepository) {
         ) { tab ->
             when (tab) {
                 NavTab.HOME -> HomeScreen()
-                NavTab.SONGS -> SongsScreen(audioRepository = audioRepository)
+                NavTab.TRACKS -> TracksScreen(audioRepository = audioRepository)
                 NavTab.ALBUMS -> AlbumsScreen()
                 NavTab.ARTISTS -> ArtistsScreen()
                 NavTab.PLAYLISTS -> PlaylistScreen()
@@ -103,7 +103,7 @@ fun MainScreen(audioRepository: AudioRepository) {
  */
 enum class NavTab {
     HOME,
-    SONGS,
+    TRACKS,
     ALBUMS,
     ARTISTS,
     PLAYLISTS
