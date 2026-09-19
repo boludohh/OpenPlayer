@@ -3,6 +3,7 @@ package com.openplayer.music.playback.engine
 import android.content.Context
 import android.os.Handler
 import android.os.Looper
+import android.util.Log
 import androidx.annotation.OptIn
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
@@ -82,6 +83,11 @@ class BassPlayerAdapter(
     context: Context,
     looper: Looper
 ) : SimpleBasePlayer(looper) {
+
+    private companion object {
+        private const val TAG = "BassPlayerAdapter"
+        private const val DEBUG_TAG = "QueueDebug"
+    }
 
     // ====== Estado interno del reproductor ======
 
@@ -188,29 +194,29 @@ class BassPlayerAdapter(
     private fun initBassWithFallback(): Boolean {
         // Intento 1: dispositivo por defecto (AAudio en Android moderno)
         if (BASS.BASS_Init(-1, DEFAULT_SAMPLE_RATE, 0)) {
-            android.util.Log.i(TAG, "BASS_Init OK with default device")
+            Log.i(TAG, "BASS_Init OK with default device")
             return true
         }
-        android.util.Log.w(TAG, "BASS_Init failed with default device, error: ${BASS.BASS_ErrorGetCode()}")
+        Log.w(TAG, "BASS_Init failed with default device, error: ${BASS.BASS_ErrorGetCode()}")
 
         // Liberar estado parcial antes del siguiente intento
         BASS.BASS_Free()
 
         // Intento 2: OpenSL ES
         if (BASS.BASS_Init(-1, DEFAULT_SAMPLE_RATE, BASS.BASS_DEVICE_OPENSLES)) {
-            android.util.Log.i(TAG, "BASS_Init OK with OpenSL ES")
+            Log.i(TAG, "BASS_Init OK with OpenSL ES")
             return true
         }
-        android.util.Log.w(TAG, "BASS_Init failed with OpenSL ES, error: ${BASS.BASS_ErrorGetCode()}")
+        Log.w(TAG, "BASS_Init failed with OpenSL ES, error: ${BASS.BASS_ErrorGetCode()}")
 
         BASS.BASS_Free()
 
         // Intento 3: AudioTrack (fallback más básico)
         if (BASS.BASS_Init(-1, DEFAULT_SAMPLE_RATE, BASS.BASS_DEVICE_AUDIOTRACK)) {
-            android.util.Log.i(TAG, "BASS_Init OK with AudioTrack")
+            Log.i(TAG, "BASS_Init OK with AudioTrack")
             return true
         }
-        android.util.Log.e(TAG, "BASS_Init failed with AudioTrack, error: ${BASS.BASS_ErrorGetCode()}")
+        Log.e(TAG, "BASS_Init failed with AudioTrack, error: ${BASS.BASS_ErrorGetCode()}")
 
         return false
     }
@@ -227,9 +233,9 @@ class BassPlayerAdapter(
         )
         if (mixerHandle == 0) {
             val err = BASS.BASS_ErrorGetCode()
-            android.util.Log.e(TAG, "Failed to create mixer, error: $err")
+            Log.e(TAG, "Failed to create mixer, error: $err")
         } else {
-            android.util.Log.i(TAG, "Mixer created successfully")
+            Log.i(TAG, "Mixer created successfully")
         }
     }
     
@@ -319,11 +325,14 @@ class BassPlayerAdapter(
      * @param newPlaylist Nueva lista de MediaItem de la biblioteca.
      */
     fun updateLibraryPlaylist(newPlaylist: List<MediaItem>) {
+        Log.d(DEBUG_TAG, "updateLibraryPlaylist called | currentQueueId=$currentQueueId | newSize=${newPlaylist.size}")
         handler.post {
             if (currentQueueId == QUEUE_LIBRARY) {
+                Log.d(DEBUG_TAG, "updateLibraryPlaylist: queueId is LIBRARY, replacing playlist completely")
                 // Cola global: reemplazar completamente
                 updatePlaylistInternal(newPlaylist)
             } else {
+                Log.d(DEBUG_TAG, "updateLibraryPlaylist: queueId is $currentQueueId, doing reactive merge")
                 // Cola personalizada: merge reactivo
                 mergePlaylistReactive(newPlaylist)
             }
@@ -372,6 +381,7 @@ class BassPlayerAdapter(
      * @param libraryItems Lista actualizada de MediaItem de la biblioteca.
      */
     private fun mergePlaylistReactive(libraryItems: List<MediaItem>) {
+        Log.d(DEBUG_TAG, "mergePlaylistReactive started | currentQueueId=$currentQueueId | currentPlaylistSize=${currentPlaylist.size}")
         val libraryMap = libraryItems.associateBy { it.mediaId }
         val currentMediaId = if (currentIndex in currentPlaylist.indices) {
             currentPlaylist[currentIndex].mediaId
@@ -383,8 +393,11 @@ class BassPlayerAdapter(
             libraryMap[currentItem.mediaId]
         }
 
+        Log.d(DEBUG_TAG, "mergePlaylistReactive: mergedPlaylistSize=${mergedPlaylist.size} (from ${currentPlaylist.size})")
+
         // Si la canción actual fue eliminada, avanzar a la siguiente o marcar IDLE
         if (currentMediaId != null && mergedPlaylist.none { it.mediaId == currentMediaId }) {
+            Log.w(DEBUG_TAG, "mergePlaylistReactive: current song was deleted, marking IDLE")
             releaseCurrentStream()
             currentPositionMs = 0L
             currentDurationMs = C.TIME_UNSET
@@ -416,6 +429,8 @@ class BassPlayerAdapter(
         val queueId = mediaItems.firstOrNull()?.localConfiguration?.tag as? String
             ?: QUEUE_LIBRARY
 
+        Log.d(DEBUG_TAG, "handleSetMediaItems called | queueId=$queueId | itemsCount=${mediaItems.size} | startIndex=$startIndex")
+        
         currentQueueId = queueId
         currentPlaylist = mediaItems.toList()
         currentIndex = startIndex.coerceIn(0, max(0, mediaItems.size - 1))
@@ -565,6 +580,7 @@ class BassPlayerAdapter(
         currentPlaybackState = Player.STATE_IDLE
         currentPositionMs = 0L
         currentQueueId = QUEUE_LIBRARY // Resetear queueId al detener
+        Log.d(DEBUG_TAG, "handleStop: queueId reset to LIBRARY")
         stopPolling()
         invalidateState()
         return Futures.immediateVoidFuture()
@@ -580,6 +596,7 @@ class BassPlayerAdapter(
         handler.removeCallbacksAndMessages(null)
         pollingScope.cancel()
         currentQueueId = QUEUE_LIBRARY // Resetear queueId al liberar
+        Log.d(DEBUG_TAG, "handleRelease: queueId reset to LIBRARY")
         invalidateState()
         return Futures.immediateVoidFuture()
     }
@@ -696,7 +713,7 @@ class BassPlayerAdapter(
                 "other"
             }
         } catch (e: Exception) {
-            android.util.Log.w(TAG, "Error detecting format for $path", e)
+            Log.w(TAG, "Error detecting format for $path", e)
             "other"
         }
 
@@ -932,6 +949,8 @@ class BassPlayerAdapter(
      */
     private fun onTrackEnded() {
         val nextIndex = currentIndex + 1
+        Log.d(DEBUG_TAG, "onTrackEnded: currentIndex=$currentIndex | nextIndex=$nextIndex | playlistSize=${currentPlaylist.size} | queueId=$currentQueueId")
+        
         if (nextIndex < currentPlaylist.size) {
             currentIndex = nextIndex
 
@@ -965,8 +984,6 @@ class BassPlayerAdapter(
     // =========================================================================
 
     companion object {
-        private const val TAG = "BassPlayerAdapter"
-
         /** Identificador de la cola global de biblioteca (sincronizada con el repositorio). */
         const val QUEUE_LIBRARY = "library"
 

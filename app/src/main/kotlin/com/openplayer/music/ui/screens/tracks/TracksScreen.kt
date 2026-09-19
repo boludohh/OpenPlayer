@@ -1,6 +1,7 @@
 package com.openplayer.music.ui.screens.tracks
 
 import android.content.ComponentName
+import android.util.Log
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
@@ -40,6 +41,8 @@ import com.openplayer.music.ui.theme.LocalTracksCountTextColor
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+
+private const val DEBUG_TAG = "QueueDebug"
 
 /**
  * Pantalla de pistas de OpenPlayer.
@@ -136,19 +139,26 @@ fun TracksScreen(
                     val current = controller ?: return@SongRow
                     val targetMediaId = song.id.toString()
 
+                    Log.d(DEBUG_TAG, "TracksScreen: user tapped song | mediaId=$targetMediaId | title=${song.title}")
+
                     coroutineScope.launch {
                         val index = (0 until current.mediaItemCount).indexOfFirst {
                             current.getMediaItemAt(it).mediaId == targetMediaId
                         }
 
+                        Log.d(DEBUG_TAG, "TracksScreen: found song in controller at index=$index (controller has ${current.mediaItemCount} items)")
+
                         if (index >= 0) {
                             // La canción ya está en la cola del controller: solo hacer seek
+                            Log.d(DEBUG_TAG, "TracksScreen: song already in queue, seeking to index $index")
                             current.seekTo(index, 0L)
                             current.play()
                         } else if (mediaItems.isNotEmpty()) {
                             // Primera reproducción desde esta pantalla: cargar cola con queueId
                             val startIndex = mediaItems.indexOfFirst { it.mediaId == targetMediaId }
                                 .coerceAtLeast(0)
+                            
+                            Log.d(DEBUG_TAG, "TracksScreen: first play, loading queue with queueId=${BassPlayerAdapter.QUEUE_TRACKS_BY_DATE} | startIndex=$startIndex | totalItems=${mediaItems.size}")
                             
                             // Agregar queueId al tag del primer MediaItem
                             val taggedMediaItems = mediaItems.mapIndexed { i, item ->
