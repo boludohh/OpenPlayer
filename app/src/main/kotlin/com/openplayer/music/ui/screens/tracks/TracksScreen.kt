@@ -30,6 +30,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -114,6 +115,10 @@ fun TracksScreen(
     val tracksCountTextColor = LocalTracksCountTextColor.current
     val backgroundColor = MaterialTheme.colorScheme.background
     val listState = rememberLazyListState()
+    val density = LocalDensity.current
+
+    // Convertir el umbral de dp a píxeles usando la densidad de la pantalla
+    val thresholdPx = with(density) { ScrollFadeThreshold.toPx() }
 
     // Calcular el alfa del fade basado en la posición de scroll.
     // - 0 cuando la lista está en reposo (primera pista visible, offset 0).
@@ -127,7 +132,6 @@ fun TracksScreen(
             if (firstVisibleIndex == 0 && firstVisibleOffset == 0) {
                 0f
             } else {
-                val thresholdPx = ScrollFadeThreshold.toPx()
                 val scrollDistance = if (firstVisibleIndex > 0) {
                     // Ya pasamos el primer item, fade al máximo
                     thresholdPx
