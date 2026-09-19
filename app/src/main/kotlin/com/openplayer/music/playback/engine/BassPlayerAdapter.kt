@@ -967,8 +967,11 @@ class BassPlayerAdapter(
     companion object {
         private const val TAG = "BassPlayerAdapter"
 
-        /** Identificador de la cola global de biblioteca. */
+        /** Identificador de la cola global de biblioteca (sincronizada con el repositorio). */
         const val QUEUE_LIBRARY = "library"
+
+        /** Identificador de la cola de TracksScreen ordenada por fecha de agregada descendente. */
+        const val QUEUE_TRACKS_BY_DATE = "tracksByDate"
 
         /** Intervalo del polling de posición en milisegundos. */
         private const val POLLING_INTERVAL_MS = 500L
