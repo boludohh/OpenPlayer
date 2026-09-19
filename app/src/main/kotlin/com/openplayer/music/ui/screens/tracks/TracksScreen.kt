@@ -50,12 +50,14 @@ import kotlinx.coroutines.withContext
 private const val DEBUG_TAG = "QueueDebug"
 
 /**
- * Altura del desvanecido inferior en dp.
- * El fade ocupa esta distancia desde el borde inferior del LazyColumn
- * hacia arriba, dibujando un gradiente vertical de transparente al
- * color de fondo principal. Visible pero no exagerado.
+ * Altura del desvanecido superior en dp.
+ * El fade ocupa esta distancia desde el tope del LazyColumn hacia abajo,
+ * dibujando un gradiente vertical del color de fondo principal (opaco en
+ * el tope) a transparente. El extremo opaco oculta la línea de recorte
+ * dura del viewport, y las pistas que suben hacia el panel fijo se
+ * desvanecen suavemente dentro de esta franja. Visible pero no exagerado.
  */
-private val BottomFadeHeight = 80.dp
+private val TopFadeHeight = 32.dp
 
 /**
  * Pantalla de pistas de OpenPlayer.
@@ -70,14 +72,18 @@ private val BottomFadeHeight = 80.dp
  * con queueId "tracksByDate" para que el orden de reproducción respete
  * el orden visual (por fecha descendente).
  *
- * **Efecto fade inferior**: se dibuja un gradiente vertical en el borde
- * inferior del área de scroll (de transparente al color de fondo), de
- * modo que las pistas que están a punto de salir de pantalla se
- * desvanecen suavemente contra el fondo principal.
+ * **Efecto fade superior**: se dibuja un gradiente vertical en el tope
+ * del área de scroll (de color de fondo opaco a transparente hacia abajo),
+ * de modo que las pistas que suben hacia el panel fijo de los iconos se
+ * desvanecen suavemente contra el fondo principal en lugar de cortarse
+ * de golpe. El viewport del scroll comienza en 43dp bajo la barra de
+ * estado (base de glifos 35dp + 8dp de respiro, definido en MainScreen),
+ * por lo que ningún contenido pasa detrás de los iconos.
  *
  * **Texto de conteo dentro del scroll**: el texto "X pistas" forma
  * parte del LazyColumn (primer item), por lo que sube junto con las
- * canciones al hacer scroll. Los iconos de la barra superior
+ * canciones al hacer scroll. Descansa por debajo de la franja de fade
+ * para verse nítido en reposo. Los iconos de la barra superior
  * (TopActionBar) permanecen fijos en MainScreen.
  *
  * **Esta pantalla no realiza extracción de portadas.**
@@ -135,31 +141,35 @@ fun TracksScreen(
             .fillMaxSize()
             .background(backgroundColor)
     ) {
-        // LazyColumn con efecto fade en el borde inferior.
+        // LazyColumn con efecto fade en el borde superior.
         // El fade se dibuja DESPUÉS del contenido (drawContent() primero),
-        // por lo que cubre las pistas que están a punto de salir de
-        // pantalla con un gradiente vertical de transparente al color
-        // de fondo principal.
+        // por lo que cubre las pistas que suben hacia el panel fijo con un
+        // gradiente vertical del color de fondo (opaco en el tope del
+        // viewport, ocultando el recorte duro) a transparente hacia abajo.
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
                 .drawWithContent {
                     drawContent()
-                    // Gradiente vertical en el borde inferior
-                    val fadeHeightPx = BottomFadeHeight.toPx()
+                    // Gradiente vertical en el borde superior
+                    val fadeHeightPx = TopFadeHeight.toPx()
                     drawRect(
                         brush = Brush.verticalGradient(
-                            colors = listOf(Color.Transparent, backgroundColor),
-                            startY = size.height - fadeHeightPx,
-                            endY = size.height
+                            colors = listOf(backgroundColor, Color.Transparent),
+                            startY = 0f,
+                            endY = fadeHeightPx
                         ),
-                        topLeft = Offset(0f, size.height - fadeHeightPx),
+                        topLeft = Offset.Zero,
                         size = Size(size.width, fadeHeightPx)
                     )
                 }
         ) {
             // Texto de conteo de pistas como primer item del scroll.
             // Sube junto con las canciones al hacer scroll.
+            // top = 32dp: el texto descansa exactamente en el fin de la
+            //   franja de fade superior (viewport en 43dp + 32dp de fade =
+            //   75dp bajo la barra de estado), por lo que en reposo se ve
+            //   nítido y sin desvanecer.
             // start = 23dp: alineado con el glifo del primer icono de la
             //   barra superior (15dp de padding del Row + 8dp de centrado
             //   del icono de 26dp dentro de su área de toque de 44dp).
@@ -171,7 +181,7 @@ fun TracksScreen(
                     textAlign = TextAlign.Start,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(start = 23.dp, top = 10.dp, end = 15.dp, bottom = 8.dp)
+                        .padding(start = 23.dp, top = 32.dp, end = 15.dp, bottom = 8.dp)
                 )
             }
 
