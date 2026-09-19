@@ -84,11 +84,6 @@ class BassPlayerAdapter(
     looper: Looper
 ) : SimpleBasePlayer(looper) {
 
-    private companion object {
-        private const val TAG = "BassPlayerAdapter"
-        private const val DEBUG_TAG = "QueueDebug"
-    }
-
     // ====== Estado interno del reproductor ======
 
     /** Handle del mixer BASS. 0 significa que no hay mixer creado. */
@@ -984,6 +979,9 @@ class BassPlayerAdapter(
     // =========================================================================
 
     companion object {
+        private const val TAG = "BassPlayerAdapter"
+        private const val DEBUG_TAG = "QueueDebug"
+
         /** Identificador de la cola global de biblioteca (sincronizada con el repositorio). */
         const val QUEUE_LIBRARY = "library"
 
