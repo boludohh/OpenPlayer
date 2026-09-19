@@ -4,7 +4,7 @@ package com.openplayer.music.data.model
  * Modelo de dominio de una canción de la biblioteca.
  *
  * Los campos provienen de dos fuentes durante el escaneo:
- * - MediaStore: id, título/artista de respaldo, duración y path.
+ * - MediaStore: id, título/artista de respaldo, duración, path y dateAdded.
  * - TagLib (propertyMap + audioProperties): metadatos descriptivos,
  *   de numeración y técnicos.
  *
@@ -35,5 +35,7 @@ data class Song(
     /** Sample rate en Hz. */
     val sampleRate: Int?,
     /** Número de canales (1 = mono, 2 = stereo). */
-    val channels: Int?
+    val channels: Int?,
+    /** Timestamp epoch en segundos de cuando se agregó el archivo. */
+    val dateAdded: Long
 )

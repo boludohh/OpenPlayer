@@ -27,6 +27,10 @@ interface SongDao {
     @Query("SELECT * FROM songs ORDER BY title ASC")
     fun getAll(): Flow<List<SongEntity>>
 
+    /** Todas las canciones ordenadas por fecha de agregada descendente (reactivo). */
+    @Query("SELECT * FROM songs ORDER BY dateAdded DESC")
+    fun getAllByDateAdded(): Flow<List<SongEntity>>
+
     /** Una canción por su id de MediaStore; null si no existe. */
     @Query("SELECT * FROM songs WHERE id = :id")
     suspend fun getById(id: Long): SongEntity?

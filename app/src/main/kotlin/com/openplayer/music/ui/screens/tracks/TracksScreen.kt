@@ -33,6 +33,7 @@ import com.openplayer.music.R
 import com.openplayer.music.data.media.AudioRepository
 import com.openplayer.music.data.media.CoverRepository
 import com.openplayer.music.data.model.Song
+import com.openplayer.music.playback.engine.BassPlayerAdapter
 import com.openplayer.music.playback.service.PlaybackService
 import com.openplayer.music.playback.toMediaItem
 import com.openplayer.music.ui.theme.LocalTracksCountTextColor
@@ -43,10 +44,15 @@ import kotlinx.coroutines.withContext
 /**
  * Pantalla de pistas de OpenPlayer.
  *
- * Muestra la lista completa de canciones escaneadas ordenadas por título.
- * Al tocar una canción inicia la reproducción vía MediaController conectado
- * al PlaybackService, buscando por mediaId para garantizar sincronización
+ * Muestra la lista completa de canciones escaneadas ordenadas por fecha
+ * de agregada descendente (las más recientes primero). Al tocar una
+ * canción inicia la reproducción vía MediaController conectado al
+ * PlaybackService, buscando por mediaId para garantizar sincronización
  * correcta con cualquier orden de lista.
+ *
+ * La primera vez que se reproduce desde esta pantalla, se carga la cola
+ * con queueId "tracksByDate" para que el orden de reproducción respete
+ * el orden visual (por fecha descendente).
  *
  * **Esta pantalla no realiza extracción de portadas.**
  * La extracción ya se hizo durante el escaneo en [AudioRepository].
@@ -61,6 +67,11 @@ fun TracksScreen(
     val coroutineScope = rememberCoroutineScope()
     val coverRepository = remember { CoverRepository(context) }
     val tracksCountTextColor = LocalTracksCountTextColor.current
+
+    // Ordenar por fecha de agregada descendente (más recientes primero)
+    val sortedSongs = remember(songs) {
+        songs.sortedByDescending { it.dateAdded }
+    }
 
     // MediaController conectado al PlaybackService
     var controller by remember { mutableStateOf<MediaController?>(null) }
@@ -84,10 +95,10 @@ fun TracksScreen(
     // Lista de MediaItems construida como fallback para primera reproducción
     var mediaItems by remember { mutableStateOf<List<androidx.media3.common.MediaItem>>(emptyList()) }
 
-    LaunchedEffect(songs) {
-        if (songs.isNotEmpty()) {
+    LaunchedEffect(sortedSongs) {
+        if (sortedSongs.isNotEmpty()) {
             mediaItems = withContext(Dispatchers.IO) {
-                songs.map { it.toMediaItem(coverRepository) }
+                sortedSongs.map { it.toMediaItem(coverRepository) }
             }
         }
     }
@@ -105,7 +116,7 @@ fun TracksScreen(
         //   interno de la fuente (~6dp sobre el glifo en línea de 24sp), el
         //   texto queda ópticamente a 8dp debajo de la base del icono (48dp).
         Text(
-            text = stringResource(R.string.main_songs_count, songs.size),
+            text = stringResource(R.string.main_songs_count, sortedSongs.size),
             style = MaterialTheme.typography.bodyLarge.copy(fontSize = 15.sp),
             color = tracksCountTextColor,
             textAlign = TextAlign.Start,
@@ -120,7 +131,7 @@ fun TracksScreen(
                 .fillMaxSize()
                 .padding(top = 8.dp)
         ) {
-            itemsIndexed(songs) { _, song ->
+            itemsIndexed(sortedSongs) { _, song ->
                 SongRow(song = song) {
                     val current = controller ?: return@SongRow
                     val targetMediaId = song.id.toString()
@@ -131,12 +142,29 @@ fun TracksScreen(
                         }
 
                         if (index >= 0) {
+                            // La canción ya está en la cola del controller: solo hacer seek
                             current.seekTo(index, 0L)
                             current.play()
                         } else if (mediaItems.isNotEmpty()) {
+                            // Primera reproducción desde esta pantalla: cargar cola con queueId
                             val startIndex = mediaItems.indexOfFirst { it.mediaId == targetMediaId }
                                 .coerceAtLeast(0)
-                            current.setMediaItems(mediaItems, startIndex, 0L)
+                            
+                            // Agregar queueId al tag del primer MediaItem
+                            val taggedMediaItems = mediaItems.mapIndexed { i, item ->
+                                if (i == 0) {
+                                    androidx.media3.common.MediaItem.Builder()
+                                        .setMediaId(item.mediaId)
+                                        .setUri(item.localConfiguration?.uri)
+                                        .setMediaMetadata(item.mediaMetadata)
+                                        .setTag(BassPlayerAdapter.QUEUE_TRACKS_BY_DATE)
+                                        .build()
+                                } else {
+                                    item
+                                }
+                            }
+                            
+                            current.setMediaItems(taggedMediaItems, startIndex, 0L)
                             current.prepare()
                             current.play()
                         }

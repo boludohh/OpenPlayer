@@ -31,7 +31,7 @@ import java.io.File
  * ## Fuentes de datos
  * - **MediaStore**: descubre archivos de audio del dispositivo
  *   (`IS_MUSIC != 0`). Es la fuente primaria de `id`, `path`,
- *   `duration` y valores de respaldo para `title`/`artist`.
+ *   `duration`, `dateAdded` y valores de respaldo para `title`/`artist`.
  * - **AudioFormatParser**: validación de formato por lectura directa
  *   de bytes del header (Kotlin puro, sin dependencias nativas).
  * - **NativeBridge / TagLib 2.3.1**: extracción estricta de
@@ -219,7 +219,8 @@ class AudioRepository(
             MediaStore.Audio.Media.ALBUM,
             MediaStore.Audio.Media.DURATION,
             MediaStore.Audio.Media.DATA,
-            MediaStore.Audio.Media.DISPLAY_NAME
+            MediaStore.Audio.Media.DISPLAY_NAME,
+            MediaStore.Audio.Media.DATE_ADDED
         )
 
         val batch = ArrayList<SongEntity>(batchSize)
@@ -239,6 +240,7 @@ class AudioRepository(
             val dataIndex = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DATA)
             val displayNameIndex =
                 cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DISPLAY_NAME)
+            val dateAddedIndex = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DATE_ADDED)
 
             while (cursor.moveToNext()) {
                 val id = cursor.getLong(idIndex)
@@ -248,6 +250,7 @@ class AudioRepository(
                 val mediaStoreArtist = cursor.getString(artistIndex).orEmpty()
                 val mediaStoreAlbum = cursor.getString(albumIndex).orEmpty()
                 val durationMs = cursor.getLong(durationIndex)
+                val dateAdded = cursor.getLong(dateAddedIndex)
 
                 // 1. Filtro fantasma
                 if (path.isEmpty() || !File(path).exists()) continue
@@ -290,7 +293,8 @@ class AudioRepository(
                     path = path,
                     bitrate = metadata["bitrate"]?.toIntOrNull(),
                     sampleRate = metadata["sampleRate"]?.toIntOrNull(),
-                    channels = metadata["channels"]?.toIntOrNull()
+                    channels = metadata["channels"]?.toIntOrNull(),
+                    dateAdded = dateAdded
                 )
 
                 batch += entity

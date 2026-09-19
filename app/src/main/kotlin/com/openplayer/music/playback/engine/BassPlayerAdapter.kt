@@ -63,6 +63,13 @@ import kotlin.math.max
  *    (`BASS_POS_MIXER_RESET`) en cada cambio de pista y seek.
  * 6. **playWhenReady**: lo controla exclusivamente Media3 vía
  *    [handleSetPlayWhenReady]; el polling nunca lo sobrescribe.
+ * 7. **Sistema de queueId**: el adapter mantiene un identificador de cola
+ *    ([currentQueueId]) que permite distinguir entre la cola global de
+ *    biblioteca (sincronizada reactivamente) y colas personalizadas
+ *    (ej. "tracksByDate", "album:42"). [updateLibraryPlaylist] solo
+ *    actualiza si el queueId actual es [QUEUE_LIBRARY]; de lo contrario
+ *    hace merge reactivo (actualiza metadatos, elimina borrados, conserva
+ *    el orden).
  *
  * ## Fuera de su responsabilidad
  *
@@ -121,6 +128,15 @@ class BassPlayerAdapter(
 
     /** Índice del ítem actual dentro de [currentPlaylist]. */
     private var currentIndex: Int = 0
+
+    /**
+     * Identificador de la cola actual. Si es [QUEUE_LIBRARY], la cola
+     * es la biblioteca global y puede ser reemplazada completamente por
+     * [updateLibraryPlaylist]. Si es otro valor, la cola es personalizada
+     * y solo se hace merge reactivo (actualiza metadatos, elimina borrados,
+     * conserva el orden).
+     */
+    private var currentQueueId: String = QUEUE_LIBRARY
 
     // ====== Hilos y ciclos ======
 
@@ -289,38 +305,102 @@ class BassPlayerAdapter(
     // =========================================================================
 
     /**
-     * Actualiza la playlist interna del adapter sin interrumpir la
-     * reproducción actual si la canción sigue existiendo.
+     * Actualiza la playlist de biblioteca del adapter.
+     *
+     * Este método es llamado por PlaybackService cuando detecta cambios
+     * en la biblioteca musical. Solo reemplaza la playlist si el queueId
+     * actual es [QUEUE_LIBRARY] (cola global de biblioteca). Si el queueId
+     * es otro (cola personalizada), hace merge reactivo: actualiza metadatos
+     * de los ítems existentes, elimina los que fueron borrados, y conserva
+     * el orden original de la cola.
+     *
+     * Se ejecuta en el hilo del Looper del player para garantizar thread safety.
+     *
+     * @param newPlaylist Nueva lista de MediaItem de la biblioteca.
      */
-    fun updatePlaylist(newPlaylist: List<MediaItem>) {
+    fun updateLibraryPlaylist(newPlaylist: List<MediaItem>) {
         handler.post {
-            val currentMediaId = if (currentIndex in currentPlaylist.indices) {
-                currentPlaylist[currentIndex].mediaId
-            } else null
-
-            currentPlaylist = newPlaylist
-
-            if (currentMediaId != null) {
-                val newIndex = currentPlaylist.indexOfFirst { it.mediaId == currentMediaId }
-
-                if (newIndex >= 0) {
-                    currentIndex = newIndex
-                    cancelPendingNext()
-                } else {
-                    releaseCurrentStream()
-                    currentPositionMs = 0L
-                    currentDurationMs = C.TIME_UNSET
-                    currentIndex = 0.coerceIn(0, max(0, currentPlaylist.size - 1))
-                    currentPlaybackState = Player.STATE_IDLE
-                    currentPlayWhenReady = false
-                    stopPolling()
-                }
+            if (currentQueueId == QUEUE_LIBRARY) {
+                // Cola global: reemplazar completamente
+                updatePlaylistInternal(newPlaylist)
             } else {
-                currentIndex = 0.coerceIn(0, max(0, currentPlaylist.size - 1))
+                // Cola personalizada: merge reactivo
+                mergePlaylistReactive(newPlaylist)
             }
-
-            invalidateState()
         }
+    }
+
+    /**
+     * Reemplaza la playlist interna sin lógica de queueId.
+     * Usado internamente cuando queueId es QUEUE_LIBRARY.
+     */
+    private fun updatePlaylistInternal(newPlaylist: List<MediaItem>) {
+        val currentMediaId = if (currentIndex in currentPlaylist.indices) {
+            currentPlaylist[currentIndex].mediaId
+        } else null
+
+        currentPlaylist = newPlaylist
+
+        if (currentMediaId != null) {
+            val newIndex = currentPlaylist.indexOfFirst { it.mediaId == currentMediaId }
+
+            if (newIndex >= 0) {
+                currentIndex = newIndex
+                cancelPendingNext()
+            } else {
+                releaseCurrentStream()
+                currentPositionMs = 0L
+                currentDurationMs = C.TIME_UNSET
+                currentIndex = 0.coerceIn(0, max(0, currentPlaylist.size - 1))
+                currentPlaybackState = Player.STATE_IDLE
+                currentPlayWhenReady = false
+                stopPolling()
+            }
+        } else {
+            currentIndex = 0.coerceIn(0, max(0, currentPlaylist.size - 1))
+        }
+
+        invalidateState()
+    }
+
+    /**
+     * Merge reactivo: actualiza metadatos de los ítems existentes en la cola
+     * personalizada, elimina los que fueron borrados de la biblioteca, y
+     * conserva el orden original. La canción actual no se interrumpe si sigue
+     * existiendo.
+     *
+     * @param libraryItems Lista actualizada de MediaItem de la biblioteca.
+     */
+    private fun mergePlaylistReactive(libraryItems: List<MediaItem>) {
+        val libraryMap = libraryItems.associateBy { it.mediaId }
+        val currentMediaId = if (currentIndex in currentPlaylist.indices) {
+            currentPlaylist[currentIndex].mediaId
+        } else null
+
+        // Filtrar la cola actual: solo conservar ítems que siguen en la biblioteca
+        // y actualizar sus metadatos con los nuevos valores
+        val mergedPlaylist = currentPlaylist.mapNotNull { currentItem ->
+            libraryMap[currentItem.mediaId]
+        }
+
+        // Si la canción actual fue eliminada, avanzar a la siguiente o marcar IDLE
+        if (currentMediaId != null && mergedPlaylist.none { it.mediaId == currentMediaId }) {
+            releaseCurrentStream()
+            currentPositionMs = 0L
+            currentDurationMs = C.TIME_UNSET
+            currentPlaybackState = Player.STATE_IDLE
+            stopPolling()
+        }
+
+        currentPlaylist = mergedPlaylist
+        currentIndex = if (currentMediaId != null) {
+            mergedPlaylist.indexOfFirst { it.mediaId == currentMediaId }.coerceAtLeast(0)
+        } else {
+            0.coerceIn(0, max(0, mergedPlaylist.size - 1))
+        }
+
+        cancelPendingNext()
+        invalidateState()
     }
 
     // =========================================================================
@@ -332,6 +412,11 @@ class BassPlayerAdapter(
         startIndex: Int,
         startPositionMs: Long
     ): ListenableFuture<*> {
+        // Leer queueId del tag del primer MediaItem (si existe)
+        val queueId = mediaItems.firstOrNull()?.localConfiguration?.tag as? String
+            ?: QUEUE_LIBRARY
+
+        currentQueueId = queueId
         currentPlaylist = mediaItems.toList()
         currentIndex = startIndex.coerceIn(0, max(0, mediaItems.size - 1))
 
@@ -479,6 +564,7 @@ class BassPlayerAdapter(
         currentPlayWhenReady = false
         currentPlaybackState = Player.STATE_IDLE
         currentPositionMs = 0L
+        currentQueueId = QUEUE_LIBRARY // Resetear queueId al detener
         stopPolling()
         invalidateState()
         return Futures.immediateVoidFuture()
@@ -493,6 +579,7 @@ class BassPlayerAdapter(
         }
         handler.removeCallbacksAndMessages(null)
         pollingScope.cancel()
+        currentQueueId = QUEUE_LIBRARY // Resetear queueId al liberar
         invalidateState()
         return Futures.immediateVoidFuture()
     }
@@ -879,6 +966,9 @@ class BassPlayerAdapter(
 
     companion object {
         private const val TAG = "BassPlayerAdapter"
+
+        /** Identificador de la cola global de biblioteca. */
+        const val QUEUE_LIBRARY = "library"
 
         /** Intervalo del polling de posición en milisegundos. */
         private const val POLLING_INTERVAL_MS = 500L

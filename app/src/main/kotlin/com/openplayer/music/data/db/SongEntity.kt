@@ -35,7 +35,9 @@ data class SongEntity(
     val path: String,
     val bitrate: Int?,
     val sampleRate: Int?,
-    val channels: Int?
+    val channels: Int?,
+    /** Timestamp epoch en segundos de cuando se agregó el archivo (MediaStore DATE_ADDED). */
+    val dateAdded: Long
 ) {
 
     /** Mapea la entidad de base de datos al modelo de dominio. */
@@ -55,6 +57,7 @@ data class SongEntity(
         path = path,
         bitrate = bitrate,
         sampleRate = sampleRate,
-        channels = channels
+        channels = channels,
+        dateAdded = dateAdded
     )
 }

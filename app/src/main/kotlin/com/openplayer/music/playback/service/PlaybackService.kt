@@ -49,7 +49,8 @@ import kotlinx.coroutines.launch
  * - **Sincronización reactiva de playlist**: se suscribe al Flow de
  *   canciones de AudioRepository y actualiza automáticamente la playlist
  *   del adapter cuando la biblioteca cambia (canciones agregadas,
- *   eliminadas o modificadas).
+ *   eliminadas o modificadas). Usa [BassPlayerAdapter.updateLibraryPlaylist]
+ *   para respetar colas personalizadas (queueId != QUEUE_LIBRARY).
  *
  * Nota de API (Media3 1.11.0): [MediaLibrarySession] es una clase
  * anidada dentro de [MediaLibraryService], por eso se importa como
@@ -207,9 +208,10 @@ class PlaybackService : MediaLibraryService() {
      * Se suscribe al Flow de canciones de AudioRepository y actualiza
      * automáticamente la playlist del adapter cuando la biblioteca cambia.
      *
-     * Esto garantiza que la playlist del reproductor siempre esté sincronizada
-     * con la biblioteca actual, sin importar el orden de las canciones o
-     * cuándo se agreguen/eliminen archivos.
+     * Usa [BassPlayerAdapter.updateLibraryPlaylist] que respeta el sistema
+     * de queueId: si el adapter tiene una cola personalizada activa
+     * (queueId != QUEUE_LIBRARY), hace merge reactivo en lugar de
+     * reemplazar completamente la cola.
      */
     private fun subscribeToLibraryChanges() {
         val audioRepository = (application as OpenPlayerApplication).audioRepository
@@ -220,7 +222,7 @@ class PlaybackService : MediaLibraryService() {
                 val mediaItems = songs.map { it.toMediaItem(coverRepository) }
                 
                 // Actualizar la playlist del adapter sin interrumpir reproducción actual
-                player?.updatePlaylist(mediaItems)
+                player?.updateLibraryPlaylist(mediaItems)
             }
         }
     }
