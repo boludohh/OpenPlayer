@@ -25,6 +25,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
 /**
@@ -46,11 +49,10 @@ import kotlinx.coroutines.launch
  * - Decidir si el servicio sobrevive en onTaskRemoved: si el usuario
  *   cierra la app mientras suena música, la reproducción continúa;
  *   si está pausada, el servicio se detiene.
- * - **Sincronización reactiva de playlist**: se suscribe al Flow de
- *   canciones de AudioRepository y actualiza automáticamente la playlist
- *   del adapter cuando la biblioteca cambia (canciones agregadas,
- *   eliminadas o modificadas). Usa [BassPlayerAdapter.updateLibraryPlaylist]
- *   para respetar colas personalizadas (queueId != QUEUE_LIBRARY).
+ * - **Sincronización reactiva global de playlist**: observa el queueId
+ *   del adapter y se suscribe al Flow de canciones correspondiente
+ *   (biblioteca completa, filtrada por álbum, por artista, etc.),
+ *   actualizando automáticamente la cola cuando cambian los datos.
  *
  * Nota de API (Media3 1.11.0): [MediaLibrarySession] es una clase
  * anidada dentro de [MediaLibraryService], por eso se importa como
@@ -201,28 +203,75 @@ class PlaybackService : MediaLibraryService() {
     }
 
     // =========================================================================
-    // Sincronización reactiva de playlist
+    // Sincronización reactiva global de playlist
     // =========================================================================
 
     /**
-     * Se suscribe al Flow de canciones de AudioRepository y actualiza
-     * automáticamente la playlist del adapter cuando la biblioteca cambia.
+     * Observa el queueId del adapter y se suscribe dinámicamente al
+     * Flow de canciones correspondiente. Cuando el queueId cambia
+     * (ej: usuario toca una canción en una pantalla diferente), cancela
+     * la suscripción anterior y crea una nueva según el nuevo contexto.
      *
-     * Usa [BassPlayerAdapter.updateLibraryPlaylist] que respeta el sistema
-     * de queueId: si el adapter tiene una cola personalizada activa
-     * (queueId != QUEUE_LIBRARY), hace merge reactivo en lugar de
-     * reemplazar completamente la cola.
+     * Tipos de queueId soportados:
+     * - "library": biblioteca completa ordenada por título
+     * - "tracksByDate": biblioteca completa ordenada por fecha descendente
+     * - "album:{nombre}": canciones de un álbum específico, ordenadas por trackNumber
+     * - "artist:{nombre}": canciones de un artista específico, ordenadas por título
+     * - "playlist:{id}": (futuro) playlist personalizada
+     *
+     * Usa [collectLatest] para cancelar automáticamente la suscripción
+     * anterior cuando cambia el queueId, evitando fugas de memoria.
      */
     private fun subscribeToLibraryChanges() {
         val audioRepository = (application as OpenPlayerApplication).audioRepository
-        
-        librarySubscriptionJob = serviceScope.launch {
-            audioRepository.songs.collect { songs ->
-                // Construir MediaItems desde las canciones
-                val mediaItems = songs.map { it.toMediaItem(coverRepository) }
-                
-                // Actualizar la playlist del adapter sin interrumpir reproducción actual
-                player?.updateLibraryPlaylist(mediaItems)
+        val bassPlayer = player ?: return
+
+        serviceScope.launch {
+            bassPlayer.queueIdFlow.distinctUntilChanged().collectLatest { queueId ->
+                // Seleccionar el Flow correcto según el queueId
+                val songsFlow = when {
+                    queueId == BassPlayerAdapter.QUEUE_LIBRARY -> {
+                        // Biblioteca completa ordenada por título (orden del DAO)
+                        audioRepository.songs
+                    }
+                    queueId == BassPlayerAdapter.QUEUE_TRACKS_BY_DATE -> {
+                        // Biblioteca completa ordenada por fecha descendente
+                        audioRepository.songs.map { songs ->
+                            songs.sortedByDescending { it.dateAdded }
+                        }
+                    }
+                    queueId.startsWith(BassPlayerAdapter.QUEUE_ALBUM_PREFIX) -> {
+                        // Canciones de un álbum específico, ordenadas por trackNumber
+                        val albumName = queueId.removePrefix(BassPlayerAdapter.QUEUE_ALBUM_PREFIX)
+                        audioRepository.songs.map { songs ->
+                            songs.filter { it.album == albumName }
+                                .sortedBy { it.trackNumber ?: Int.MAX_VALUE }
+                        }
+                    }
+                    queueId.startsWith(BassPlayerAdapter.QUEUE_ARTIST_PREFIX) -> {
+                        // Canciones de un artista específico, ordenadas por título
+                        val artistName = queueId.removePrefix(BassPlayerAdapter.QUEUE_ARTIST_PREFIX)
+                        audioRepository.songs.map { songs ->
+                            songs.filter { it.artist == artistName }
+                                .sortedBy { it.title }
+                        }
+                    }
+                    queueId.startsWith(BassPlayerAdapter.QUEUE_PLAYLIST_PREFIX) -> {
+                        // Futuro: playlist personalizada desde PlaylistRepository
+                        // Por ahora, biblioteca completa como fallback
+                        audioRepository.songs
+                    }
+                    else -> {
+                        // QueueId desconocido: usar biblioteca completa
+                        audioRepository.songs
+                    }
+                }
+
+                // Suscribirse al Flow y enviar MediaItems al adapter
+                songsFlow.collect { songs ->
+                    val mediaItems = songs.map { it.toMediaItem(coverRepository) }
+                    bassPlayer.updateLibraryPlaylist(mediaItems)
+                }
             }
         }
     }

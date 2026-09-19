@@ -24,59 +24,67 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlin.math.max
 
 /**
  * Adapter que expone BASS Audio Library como un `Player` de Media3.
- *
  * Extiende [SimpleBasePlayer] para reutilizar la implementación base
  * de la interfaz [Player] y solo tener que sobrescribir los handlers
  * que traducen cada comando Media3 a llamadas equivalentes de BASS
  * usando los wrappers oficiales [BASS], [BASSmix], [BASSOPUS],
  * [BASSFLAC] y [BASS_AAC].
  *
- * ## Arquitectura de reproducción con BASSmix
+ * Arquitectura de reproducción con BASSmix
  *
- * 1. **Mixer stream**: se crea al inicializar y es el único stream con
- *    salida de audio al dispositivo. Si el init falla (device de audio
- *    no listo en instalaciones frescas), [ensureBassReady] lo reintenta
- *    en cada play con una cadena de fallback (default → OpenSL ES → AudioTrack)
- *    y re-vincula los streams existentes.
- * 2. **Streams decodificadores**: cada canción se crea con
- *    `BASS_STREAM_DECODE` (sin PRESCAN, apertura instantánea) y se añade
- *    al mixer, no se reproduce directamente. Para archivos Opus se usa
- *    [BASSOPUS], para FLAC se usa [BASSFLAC], para AAC se usa [BASS_AAC],
- *    y para el resto (MP3, OGG Vorbis) se usa [BASS] genérico.
- * 3. **Gapless puro**: el polling detecta cuánto falta para el final y,
- *    [GAPLESS_SCHEDULE_MS] antes, añade la siguiente pista con
- *    `BASS_Mixer_StreamAddChannelEx` usando un start RELATIVO en bytes
- *    del mixer → arranca en el byte exacto donde termina la actual,
- *    sin silencio y sin solapamiento.
- * 4. **Transición de metadatos**: cuando el canal de la pista actual
- *    termina, BASSmix lo libera (AUTOFREE) y sus lecturas fallan. El
- *    polling interpreta ese fallo como fin de pista y promueve la
- *    siguiente pista a actual (índice, handles y duración), de modo que
- *    notificación y metadatos Media3 coinciden con lo que suena.
- * 5. **Baja latencia**: buffers de salida de BASS reducidos antes de
- *    `BASS_Init`, y flush del buffer de reproducción del mixer
- *    (`BASS_POS_MIXER_RESET`) en cada cambio de pista y seek.
- * 6. **playWhenReady**: lo controla exclusivamente Media3 vía
- *    [handleSetPlayWhenReady]; el polling nunca lo sobrescribe.
- * 7. **Sistema de queueId**: el adapter mantiene un identificador de cola
- *    ([currentQueueId]) que permite distinguir entre la cola global de
- *    biblioteca (sincronizada reactivamente) y colas personalizadas
- *    (ej. "tracksByDate", "album:42"). [updateLibraryPlaylist] solo
- *    actualiza si el queueId actual es [QUEUE_LIBRARY]; de lo contrario
- *    hace merge reactivo (actualiza metadatos, elimina borrados, conserva
- *    el orden).
+ * Mixer stream: se crea al inicializar y es el único stream con
+ * salida de audio al dispositivo. Si el init falla (device de audio
+ * no listo en instalaciones frescas), [ensureBassReady] lo reintenta
+ * en cada play con una cadena de fallback (default → OpenSL ES → AudioTrack)
+ * y re-vincula los streams existentes.
  *
- * ## Fuera de su responsabilidad
+ * Streams decodificadores: cada canción se crea con
+ * `BASS_STREAM_DECODE` (sin PRESCAN, apertura instantánea) y se añade
+ * al mixer, no se reproduce directamente. Para archivos Opus se usa
+ * [BASSOPUS], para FLAC se usa [BASSFLAC], para AAC se usa [BASS_AAC],
+ * y para el resto (MP3, OGG Vorbis) se usa [BASS] genérico.
  *
- * - **Audio focus**: lo maneja el `PlaybackService` de forma unificada.
- * - **Selección de motor**: la gestiona `PlaybackEngineManager` (Fase 5).
- * - **Capa de datos Song**: no conoce `AudioRepository` ni `Song`.
+ * Gapless puro: el polling detecta cuánto falta para el final y,
+ * [GAPLESS_SCHEDULE_MS] antes, añade la siguiente pista con
+ * `BASS_Mixer_StreamAddChannelEx` usando un start RELATIVO en bytes
+ * del mixer → arranca en el byte exacto donde termina la actual,
+ * sin silencio y sin solapamiento.
+ *
+ * Transición de metadatos: cuando el canal de la pista actual
+ * termina, BASSmix lo libera (AUTOFREE) y sus lecturas fallan. El
+ * polling interpreta ese fallo como fin de pista y promueve la
+ * siguiente pista a actual (índice, handles y duración), de modo que
+ * notificación y metadatos Media3 coinciden con lo que suena.
+ *
+ * Baja latencia: buffers de salida de BASS reducidos antes de
+ * `BASS_Init`, y flush del buffer de reproducción del mixer
+ * (`BASS_POS_MIXER_RESET`) en cada cambio de pista y seek.
+ *
+ * playWhenReady: lo controla exclusivamente Media3 vía
+ * [handleSetPlayWhenReady]; el polling nunca lo sobrescribe.
+ *
+ * Sistema de queueId global: el adapter mantiene un identificador
+ * de cola ([currentQueueId]) expuesto como [queueIdFlow] que permite
+ * al PlaybackService distinguir entre diferentes tipos de cola
+ * (biblioteca global, orden por fecha, álbum, artista, playlist)
+ * y sincronizar reactivamente la cola correcta según el contexto.
+ *
+ * Fuera de su responsabilidad
+ *
+ * Audio focus: lo maneja el `PlaybackService` de forma unificada.
+ *
+ * Selección de motor: la gestiona `PlaybackEngineManager` (Fase 5).
+ *
+ * Capa de datos Song: no conoce `AudioRepository` ni `Song`.
  */
 @OptIn(UnstableApi::class)
 class BassPlayerAdapter(
@@ -131,11 +139,11 @@ class BassPlayerAdapter(
     private var currentIndex: Int = 0
 
     /**
-     * Identificador de la cola actual. Si es [QUEUE_LIBRARY], la cola
-     * es la biblioteca global y puede ser reemplazada completamente por
-     * [updateLibraryPlaylist]. Si es otro valor, la cola es personalizada
-     * y solo se hace merge reactivo (actualiza metadatos, elimina borrados,
-     * conserva el orden).
+     * Identificador de la cola actual. Este valor determina qué tipo
+     * de cola está activa y cómo debe sincronizarse con los cambios
+     * en la biblioteca. El [PlaybackService] observa [queueIdFlow] para
+     * decidir qué Flow de canciones usar (biblioteca completa, filtrada
+     * por álbum, por artista, etc.).
      */
     private var currentQueueId: String = QUEUE_LIBRARY
 
@@ -152,6 +160,16 @@ class BassPlayerAdapter(
 
     /** Flag interno para saber si BASS ya fue inicializado en este adapter. */
     private var bassInitialized: Boolean = false
+
+    // ====== StateFlow para queueId reactivo ======
+
+    /**
+     * StateFlow que expone el queueId actual. El PlaybackService se
+     * suscribe a este flujo para detectar cambios de cola y reaccionar
+     * cambiando su suscripción al Flow de canciones correspondiente.
+     */
+    private val _queueIdFlow = MutableStateFlow(QUEUE_LIBRARY)
+    val queueIdFlow: StateFlow<String> = _queueIdFlow.asStateFlow()
 
     init {
         // Buffers de salida reducidos ANTES de BASS_Init: menos latencia
@@ -193,7 +211,6 @@ class BassPlayerAdapter(
             return true
         }
         Log.w(TAG, "BASS_Init failed with default device, error: ${BASS.BASS_ErrorGetCode()}")
-
         // Liberar estado parcial antes del siguiente intento
         BASS.BASS_Free()
 
@@ -203,7 +220,6 @@ class BassPlayerAdapter(
             return true
         }
         Log.w(TAG, "BASS_Init failed with OpenSL ES, error: ${BASS.BASS_ErrorGetCode()}")
-
         BASS.BASS_Free()
 
         // Intento 3: AudioTrack (fallback más básico)
@@ -212,7 +228,6 @@ class BassPlayerAdapter(
             return true
         }
         Log.e(TAG, "BASS_Init failed with AudioTrack, error: ${BASS.BASS_ErrorGetCode()}")
-
         return false
     }
 
@@ -306,109 +321,52 @@ class BassPlayerAdapter(
     // =========================================================================
 
     /**
-     * Actualiza la playlist de biblioteca del adapter.
+     * Actualiza la playlist del adapter con la lista correcta según
+     * el queueId activo. Este método es llamado por PlaybackService
+     * cuando detecta cambios en la biblioteca musical. El servicio
+     * ya envía la lista filtrada/ordenada correctamente según el
+     * queueId (biblioteca completa, álbum específico, artista específico, etc.).
      *
-     * Este método es llamado por PlaybackService cuando detecta cambios
-     * en la biblioteca musical. Solo reemplaza la playlist si el queueId
-     * actual es [QUEUE_LIBRARY] (cola global de biblioteca). Si el queueId
-     * es otro (cola personalizada), hace merge reactivo: actualiza metadatos
-     * de los ítems existentes, elimina los que fueron borrados, y conserva
-     * el orden original de la cola.
+     * El adapter reemplaza la playlist completa pero preserva la
+     * canción actual si sigue existiendo en la nueva lista (por mediaId).
+     * Si la canción actual fue eliminada, marca el estado como IDLE.
      *
      * Se ejecuta en el hilo del Looper del player para garantizar thread safety.
      *
-     * @param newPlaylist Nueva lista de MediaItem de la biblioteca.
+     * @param newPlaylist Nueva lista de MediaItem ya filtrada y ordenada
+     *                    según el queueId activo.
      */
     fun updateLibraryPlaylist(newPlaylist: List<MediaItem>) {
         Log.d(DEBUG_TAG, "updateLibraryPlaylist called | currentQueueId=$currentQueueId | newSize=${newPlaylist.size}")
         handler.post {
-            if (currentQueueId == QUEUE_LIBRARY) {
-                Log.d(DEBUG_TAG, "updateLibraryPlaylist: queueId is LIBRARY, replacing playlist completely")
-                // Cola global: reemplazar completamente
-                updatePlaylistInternal(newPlaylist)
+            val currentMediaId = if (currentIndex in currentPlaylist.indices) {
+                currentPlaylist[currentIndex].mediaId
+            } else null
+
+            currentPlaylist = newPlaylist
+
+            if (currentMediaId != null) {
+                val newIndex = currentPlaylist.indexOfFirst { it.mediaId == currentMediaId }
+
+                if (newIndex >= 0) {
+                    currentIndex = newIndex
+                    cancelPendingNext()
+                } else {
+                    // La canción actual fue eliminada
+                    releaseCurrentStream()
+                    currentPositionMs = 0L
+                    currentDurationMs = C.TIME_UNSET
+                    currentIndex = 0.coerceIn(0, max(0, currentPlaylist.size - 1))
+                    currentPlaybackState = Player.STATE_IDLE
+                    currentPlayWhenReady = false
+                    stopPolling()
+                }
             } else {
-                Log.d(DEBUG_TAG, "updateLibraryPlaylist: queueId is $currentQueueId, doing reactive merge")
-                // Cola personalizada: merge reactivo
-                mergePlaylistReactive(newPlaylist)
-            }
-        }
-    }
-
-    /**
-     * Reemplaza la playlist interna sin lógica de queueId.
-     * Usado internamente cuando queueId es QUEUE_LIBRARY.
-     */
-    private fun updatePlaylistInternal(newPlaylist: List<MediaItem>) {
-        val currentMediaId = if (currentIndex in currentPlaylist.indices) {
-            currentPlaylist[currentIndex].mediaId
-        } else null
-
-        currentPlaylist = newPlaylist
-
-        if (currentMediaId != null) {
-            val newIndex = currentPlaylist.indexOfFirst { it.mediaId == currentMediaId }
-
-            if (newIndex >= 0) {
-                currentIndex = newIndex
-                cancelPendingNext()
-            } else {
-                releaseCurrentStream()
-                currentPositionMs = 0L
-                currentDurationMs = C.TIME_UNSET
                 currentIndex = 0.coerceIn(0, max(0, currentPlaylist.size - 1))
-                currentPlaybackState = Player.STATE_IDLE
-                currentPlayWhenReady = false
-                stopPolling()
             }
-        } else {
-            currentIndex = 0.coerceIn(0, max(0, currentPlaylist.size - 1))
+
+            invalidateState()
         }
-
-        invalidateState()
-    }
-
-    /**
-     * Merge reactivo: actualiza metadatos de los ítems existentes en la cola
-     * personalizada, elimina los que fueron borrados de la biblioteca, y
-     * conserva el orden original. La canción actual no se interrumpe si sigue
-     * existiendo.
-     *
-     * @param libraryItems Lista actualizada de MediaItem de la biblioteca.
-     */
-    private fun mergePlaylistReactive(libraryItems: List<MediaItem>) {
-        Log.d(DEBUG_TAG, "mergePlaylistReactive started | currentQueueId=$currentQueueId | currentPlaylistSize=${currentPlaylist.size}")
-        val libraryMap = libraryItems.associateBy { it.mediaId }
-        val currentMediaId = if (currentIndex in currentPlaylist.indices) {
-            currentPlaylist[currentIndex].mediaId
-        } else null
-
-        // Filtrar la cola actual: solo conservar ítems que siguen en la biblioteca
-        // y actualizar sus metadatos con los nuevos valores
-        val mergedPlaylist = currentPlaylist.mapNotNull { currentItem ->
-            libraryMap[currentItem.mediaId]
-        }
-
-        Log.d(DEBUG_TAG, "mergePlaylistReactive: mergedPlaylistSize=${mergedPlaylist.size} (from ${currentPlaylist.size})")
-
-        // Si la canción actual fue eliminada, avanzar a la siguiente o marcar IDLE
-        if (currentMediaId != null && mergedPlaylist.none { it.mediaId == currentMediaId }) {
-            Log.w(DEBUG_TAG, "mergePlaylistReactive: current song was deleted, marking IDLE")
-            releaseCurrentStream()
-            currentPositionMs = 0L
-            currentDurationMs = C.TIME_UNSET
-            currentPlaybackState = Player.STATE_IDLE
-            stopPolling()
-        }
-
-        currentPlaylist = mergedPlaylist
-        currentIndex = if (currentMediaId != null) {
-            mergedPlaylist.indexOfFirst { it.mediaId == currentMediaId }.coerceAtLeast(0)
-        } else {
-            0.coerceIn(0, max(0, mergedPlaylist.size - 1))
-        }
-
-        cancelPendingNext()
-        invalidateState()
     }
 
     // =========================================================================
@@ -425,8 +383,9 @@ class BassPlayerAdapter(
             ?: QUEUE_LIBRARY
 
         Log.d(DEBUG_TAG, "handleSetMediaItems called | queueId=$queueId | itemsCount=${mediaItems.size} | startIndex=$startIndex")
-        
+
         currentQueueId = queueId
+        _queueIdFlow.value = queueId // Notificar al PlaybackService del cambio
         currentPlaylist = mediaItems.toList()
         currentIndex = startIndex.coerceIn(0, max(0, mediaItems.size - 1))
 
@@ -434,6 +393,7 @@ class BassPlayerAdapter(
 
         if (currentPlaylist.isNotEmpty()) {
             createStreamForCurrentItem()
+
             if (currentHandle != 0) {
                 val start = startPositionMs.coerceAtLeast(0L)
                 val bytes = BASS.BASS_ChannelSeconds2Bytes(currentHandle, start / 1000.0)
@@ -488,11 +448,14 @@ class BassPlayerAdapter(
         if (fromIndex !in 0 until currentPlaylist.size) {
             return Futures.immediateVoidFuture()
         }
+
         val safeToIndex = toIndex.coerceIn(fromIndex, currentPlaylist.size)
         val newList = currentPlaylist.toMutableList()
         val moved = newList.subList(fromIndex, safeToIndex).toList()
+
         newList.subList(fromIndex, safeToIndex).clear()
         newList.addAll(newIndex.coerceIn(0, newList.size), moved)
+
         currentPlaylist = newList
         invalidateState()
         return Futures.immediateVoidFuture()
@@ -553,7 +516,6 @@ class BassPlayerAdapter(
             }
         } else if (positionMs != C.TIME_UNSET && currentHandle != 0) {
             cancelPendingNext()
-
             val bytes = BASS.BASS_ChannelSeconds2Bytes(currentHandle, positionMs / 1000.0)
             BASSmix.BASS_Mixer_ChannelSetPosition(
                 currentHandle,
@@ -574,7 +536,8 @@ class BassPlayerAdapter(
         currentPlayWhenReady = false
         currentPlaybackState = Player.STATE_IDLE
         currentPositionMs = 0L
-        currentQueueId = QUEUE_LIBRARY // Resetear queueId al detener
+        currentQueueId = QUEUE_LIBRARY
+        _queueIdFlow.value = QUEUE_LIBRARY // Resetear queueId al detener
         Log.d(DEBUG_TAG, "handleStop: queueId reset to LIBRARY")
         stopPolling()
         invalidateState()
@@ -584,14 +547,19 @@ class BassPlayerAdapter(
     override fun handleRelease(): ListenableFuture<*> {
         stopPolling()
         releaseCurrentStream()
+
         if (mixerHandle != 0) {
             BASS.BASS_StreamFree(mixerHandle)
             mixerHandle = 0
         }
+
         handler.removeCallbacksAndMessages(null)
         pollingScope.cancel()
-        currentQueueId = QUEUE_LIBRARY // Resetear queueId al liberar
+
+        currentQueueId = QUEUE_LIBRARY
+        _queueIdFlow.value = QUEUE_LIBRARY // Resetear queueId al liberar
         Log.d(DEBUG_TAG, "handleRelease: queueId reset to LIBRARY")
+
         invalidateState()
         return Futures.immediateVoidFuture()
     }
@@ -654,7 +622,6 @@ class BassPlayerAdapter(
         }
 
         val handle = createDecoderStream(path)
-
         if (handle == 0) {
             currentHandle = 0
             currentPlaybackState = Player.STATE_IDLE
@@ -679,13 +646,13 @@ class BassPlayerAdapter(
     /**
      * Crea un stream decodificador para el archivo dado, eligiendo el
      * wrapper apropiado según el formato detectado:
-     * - Opus → BASSOPUS.BASS_OPUS_StreamCreateFile()
-     * - FLAC u OGG FLAC → BASSFLAC.BASS_FLAC_StreamCreateFile()
-     * - AAC/M4A → BASS_AAC.BASS_AAC_StreamCreateFile()
-     * - Otros (MP3, OGG Vorbis, etc.) → BASS.BASS_StreamCreateFile()
+     * Opus → BASSOPUS.BASS_OPUS_StreamCreateFile()
+     * FLAC u OGG FLAC → BASSFLAC.BASS_FLAC_StreamCreateFile()
+     * AAC/M4A → BASS_AAC.BASS_AAC_StreamCreateFile()
+     * Otros (MP3, OGG Vorbis, etc.) → BASS.BASS_StreamCreateFile()
      *
      * @param path Ruta absoluta al archivo de audio.
-     * @return Handle del stream (> 0) o 0 si falló.
+     * @return Handle del stream ( > 0) o 0 si falló.
      */
     private fun createDecoderStream(path: String): Int {
         val format = try {
@@ -732,13 +699,13 @@ class BassPlayerAdapter(
                 val header = ByteArray(64)
                 val read = file.read(header)
                 if (read < 27) return "unknown"
-                
+
                 // Verificar magic "OggS"
                 if (header[0] != 'O'.code.toByte() || header[1] != 'g'.code.toByte() ||
                     header[2] != 'g'.code.toByte() || header[3] != 'S'.code.toByte()) {
                     return "unknown"
                 }
-                
+
                 // Buscar en el primer paquete
                 if (read >= 8 && header[0] == 0x01.toByte() && 
                     header[1] == 'v'.code.toByte() && header[2] == 'o'.code.toByte() &&
@@ -746,6 +713,7 @@ class BassPlayerAdapter(
                     header[5] == 'i'.code.toByte() && header[6] == 's'.code.toByte()) {
                     return "vorbis"
                 }
+
                 if (read >= 8 && header[0] == 'O'.code.toByte() && 
                     header[1] == 'p'.code.toByte() && header[2] == 'u'.code.toByte() &&
                     header[3] == 's'.code.toByte() && header[4] == 'H'.code.toByte() &&
@@ -753,11 +721,13 @@ class BassPlayerAdapter(
                     header[7] == 'd'.code.toByte()) {
                     return "opus"
                 }
+
                 if (read >= 5 && header[0] == 0x7F.toByte() && 
                     header[1] == 'F'.code.toByte() && header[2] == 'L'.code.toByte() &&
                     header[3] == 'A'.code.toByte() && header[4] == 'C'.code.toByte()) {
                     return "flac"
                 }
+
                 "unknown"
             }
         } catch (e: Exception) {
@@ -772,6 +742,7 @@ class BassPlayerAdapter(
     private fun lengthMsOf(handle: Int): Long {
         val bytes = BASS.BASS_ChannelGetLength(handle, BASS.BASS_POS_BYTE)
         if (bytes < 0L) return C.TIME_UNSET
+
         val ms = (BASS.BASS_ChannelBytes2Seconds(handle, bytes) * 1000.0).toLong()
         return if (ms < 0L) C.TIME_UNSET else ms
     }
@@ -781,8 +752,8 @@ class BassPlayerAdapter(
      */
     private fun scheduleNextGapless(remainingMs: Long) {
         nextScheduled = true
-
         val nextIndex = currentIndex + 1
+
         if (nextIndex >= currentPlaylist.size) {
             return
         }
@@ -796,6 +767,7 @@ class BassPlayerAdapter(
         if (handle == 0) {
             return
         }
+
         nextHandle = handle
 
         if (mixerHandle == 0) return
@@ -831,7 +803,7 @@ class BassPlayerAdapter(
         }
         if (nextHandle != 0) {
             BASSmix.BASS_Mixer_ChannelRemove(nextHandle)
-            BASS.BASS_StreamFree(nextHandle)
+            BASS.BASS.StreamFree(nextHandle)
             nextHandle = 0
         }
         nextScheduled = false
@@ -859,6 +831,7 @@ class BassPlayerAdapter(
     /** Arranca el ciclo de polling si no estaba activo. */
     private fun startPolling() {
         if (pollingJob?.isActive == true) return
+
         pollingJob = pollingScope.launch {
             while (isActive) {
                 updateFromNative()
@@ -888,6 +861,7 @@ class BassPlayerAdapter(
         } else {
             -1L
         }
+
         val active = BASSmix.BASS_Mixer_ChannelIsActive(handle)
 
         handler.post {
@@ -944,8 +918,9 @@ class BassPlayerAdapter(
      */
     private fun onTrackEnded() {
         val nextIndex = currentIndex + 1
+
         Log.d(DEBUG_TAG, "onTrackEnded: currentIndex=$currentIndex | nextIndex=$nextIndex | playlistSize=${currentPlaylist.size} | queueId=$currentQueueId")
-        
+
         if (nextIndex < currentPlaylist.size) {
             currentIndex = nextIndex
 
@@ -982,11 +957,20 @@ class BassPlayerAdapter(
         private const val TAG = "BassPlayerAdapter"
         private const val DEBUG_TAG = "QueueDebug"
 
-        /** Identificador de la cola global de biblioteca (sincronizada con el repositorio). */
+        /** Identificador de la cola global de biblioteca (ordenada por título). */
         const val QUEUE_LIBRARY = "library"
 
         /** Identificador de la cola de TracksScreen ordenada por fecha de agregada descendente. */
         const val QUEUE_TRACKS_BY_DATE = "tracksByDate"
+
+        /** Prefijo para colas de álbum específico. Formato: "album:{nombreÁlbum}" */
+        const val QUEUE_ALBUM_PREFIX = "album:"
+
+        /** Prefijo para colas de artista específico. Formato: "artist:{nombreArtista}" */
+        const val QUEUE_ARTIST_PREFIX = "artist:"
+
+        /** Prefijo para playlists personalizadas. Formato: "playlist:{playlistId}" */
+        const val QUEUE_PLAYLIST_PREFIX = "playlist:"
 
         /** Intervalo del polling de posición en milisegundos. */
         private const val POLLING_INTERVAL_MS = 500L
