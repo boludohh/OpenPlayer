@@ -115,9 +115,10 @@ fun TracksScreen(
         // start = 23dp: alineado con el glifo del primer icono de la barra
         //   superior (15dp de padding del Row + 8dp de centrado del icono
         //   de 28dp dentro de su área de toque de 44dp).
-        // top = 10dp: la caja del texto queda a 50dp; compensando el leading
-        //   interno de la fuente (~6dp sobre el glifo en línea de 24sp), el
-        //   texto queda ópticamente a 8dp debajo de la base del icono (48dp).
+        // top = 10dp: la caja del texto queda a 38dp (28dp de inicio de
+        //   contenido + 10dp); compensando el leading interno de la fuente
+        //   (~6dp sobre el glifo en línea de 24sp), el texto queda ópticamente
+        //   a 8dp debajo de la base del icono (36dp).
         Text(
             text = stringResource(R.string.main_songs_count, sortedSongs.size),
             style = MaterialTheme.typography.bodyLarge.copy(fontSize = 15.sp),

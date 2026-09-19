@@ -44,7 +44,10 @@ import com.openplayer.music.ui.screens.tracks.TracksScreen
  * - Barra de acción superior con iconos de menú y búsqueda
  * - Panel inferior siempre visible con animación de elevación en icono activo
  * - Padding inferior de 130dp para no ocultar contenido bajo el panel
- * - Padding superior de 40dp para no ocultar contenido bajo la barra de acción
+ * - Padding superior de 28dp: la barra de acción ocupa 44dp (glifos
+ *   ópticos en 8–36dp); cada pantalla calibra su primer elemento sobre
+ *   este inicio (p. ej. TracksScreen suma +10dp) para mantener el ritmo
+ *   óptico de 8dp bajo la base de los iconos.
  * - StatusBarsPadding aplicado al contenedor raíz para que el contenido no
  *   quede detrás de la barra de estado del sistema.
  */
@@ -60,7 +63,9 @@ fun MainScreen(audioRepository: AudioRepository) {
             .statusBarsPadding() // Reserva el espacio de la barra de estado una sola vez
     ) {
         // Contenido principal con transición fade entre pantallas
-        // Padding top = 40dp (altura de la barra de acción superior)
+        // Padding top = 28dp: la barra superior ocupa 44dp pero sus glifos
+        //   quedan óptimamente en 8–36dp; 28dp + el padding propio de cada
+        //   pantalla conserva el ritmo óptico bajo los iconos.
         // Padding bottom = 130dp (altura del panel de navegación inferior)
         AnimatedContent(
             targetState = selectedTab,
@@ -71,7 +76,7 @@ fun MainScreen(audioRepository: AudioRepository) {
             label = "screenTransition",
             modifier = Modifier
                 .fillMaxSize()
-                .padding(top = 40.dp, bottom = 130.dp)
+                .padding(top = 28.dp, bottom = 130.dp)
         ) { tab ->
             when (tab) {
                 NavTab.HOME -> HomeScreen()

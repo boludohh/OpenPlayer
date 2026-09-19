@@ -24,7 +24,11 @@ import com.openplayer.music.ui.theme.LocalTopBarIconColor
  * - Primer icono (menú): 15dp del margen izquierdo
  * - Segundo icono (búsqueda): 15dp del primer icono
  * - Color adaptativo según el tema usando [LocalTopBarIconColor]
- * - Padding superior de 12dp después del statusBarsPadding
+ * - Sin padding superior propio: el contenedor padre aplica
+ *   statusBarsPadding, por lo que la barra queda pegada justo debajo
+ *   de la barra de estado. El área de toque de 44dp centra el glifo
+ *   de 28dp, dejando 8dp de margen óptico superior (glifo en 8–36dp
+ *   relativos al inicio del contenido bajo la barra de estado).
  *
  * @param modifier Modificador externo que aplica el posicionamiento
  *                 desde el contenedor padre.
@@ -34,7 +38,7 @@ fun TopActionBar(modifier: Modifier = Modifier) {
     val iconColor = LocalTopBarIconColor.current
 
     Row(
-        modifier = modifier.padding(start = 15.dp, top = 12.dp)
+        modifier = modifier.padding(start = 15.dp)
     ) {
         // Icono de menú (tres líneas)
         IconButton(
