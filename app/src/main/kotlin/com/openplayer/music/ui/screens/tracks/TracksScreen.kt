@@ -22,6 +22,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
@@ -45,6 +50,14 @@ import kotlinx.coroutines.withContext
 private const val DEBUG_TAG = "QueueDebug"
 
 /**
+ * Altura del desvanecido inferior en dp.
+ * El fade ocupa esta distancia desde el borde inferior del LazyColumn
+ * hacia arriba, dibujando un gradiente vertical de transparente al
+ * color de fondo principal. Visible pero no exagerado.
+ */
+private val BottomFadeHeight = 80.dp
+
+/**
  * Pantalla de pistas de OpenPlayer.
  *
  * Muestra la lista completa de canciones escaneadas ordenadas por fecha
@@ -56,6 +69,16 @@ private const val DEBUG_TAG = "QueueDebug"
  * La primera vez que se reproduce desde esta pantalla, se carga la cola
  * con queueId "tracksByDate" para que el orden de reproducción respete
  * el orden visual (por fecha descendente).
+ *
+ * **Efecto fade inferior**: se dibuja un gradiente vertical en el borde
+ * inferior del área de scroll (de transparente al color de fondo), de
+ * modo que las pistas que están a punto de salir de pantalla se
+ * desvanecen suavemente contra el fondo principal.
+ *
+ * **Texto de conteo dentro del scroll**: el texto "X pistas" forma
+ * parte del LazyColumn (primer item), por lo que sube junto con las
+ * canciones al hacer scroll. Los iconos de la barra superior
+ * (TopActionBar) permanecen fijos en MainScreen.
  *
  * **Esta pantalla no realiza extracción de portadas.**
  * La extracción ya se hizo durante el escaneo en [AudioRepository].
@@ -70,6 +93,7 @@ fun TracksScreen(
     val coroutineScope = rememberCoroutineScope()
     val coverRepository = remember { CoverRepository(context) }
     val tracksCountTextColor = LocalTracksCountTextColor.current
+    val backgroundColor = MaterialTheme.colorScheme.background
 
     // Ordenar por fecha de agregada descendente (más recientes primero)
     val sortedSongs = remember(songs) {
@@ -109,33 +133,53 @@ fun TracksScreen(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
+            .background(backgroundColor)
     ) {
-        // Texto de conteo de pistas: 15sp de tamaño.
-        // start = 23dp: alineado con el glifo del primer icono de la barra
-        //   superior (15dp de padding del Row + 8dp de centrado del icono
-        //   de 28dp dentro de su área de toque de 44dp).
-        // top = 10dp: la caja del texto queda a 38dp (28dp de inicio de
-        //   contenido + 10dp); compensando el leading interno de la fuente
-        //   (~6dp sobre el glifo en línea de 24sp), el texto queda ópticamente
-        //   a 8dp debajo de la base del icono (36dp).
-        Text(
-            text = stringResource(R.string.main_songs_count, sortedSongs.size),
-            style = MaterialTheme.typography.bodyLarge.copy(fontSize = 15.sp),
-            color = tracksCountTextColor,
-            textAlign = TextAlign.Start,
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(start = 23.dp, top = 10.dp, end = 15.dp)
-        )
-
-        // Lista de pistas con 8dp de separación respecto al texto de conteo
+        // LazyColumn con efecto fade en el borde inferior.
+        // El fade se dibuja DESPUÉS del contenido (drawContent() primero),
+        // por lo que cubre las pistas que están a punto de salir de
+        // pantalla con un gradiente vertical de transparente al color
+        // de fondo principal.
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(top = 8.dp)
+                .drawWithContent {
+                    drawContent()
+                    // Gradiente vertical en el borde inferior
+                    val fadeHeightPx = BottomFadeHeight.toPx()
+                    drawRect(
+                        brush = Brush.verticalGradient(
+                            colors = listOf(Color.Transparent, backgroundColor),
+                            startY = size.height - fadeHeightPx,
+                            endY = size.height
+                        ),
+                        topLeft = Offset(0f, size.height - fadeHeightPx),
+                        size = Size(size.width, fadeHeightPx)
+                    )
+                }
         ) {
-            itemsIndexed(sortedSongs) { _, song ->
+            // Texto de conteo de pistas como primer item del scroll.
+            // Sube junto con las canciones al hacer scroll.
+            // start = 23dp: alineado con el glifo del primer icono de la
+            //   barra superior (15dp de padding del Row + 8dp de centrado
+            //   del icono de 26dp dentro de su área de toque de 44dp).
+            item(key = "tracks_count_header") {
+                Text(
+                    text = stringResource(R.string.main_songs_count, sortedSongs.size),
+                    style = MaterialTheme.typography.bodyLarge.copy(fontSize = 15.sp),
+                    color = tracksCountTextColor,
+                    textAlign = TextAlign.Start,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 23.dp, top = 10.dp, end = 15.dp, bottom = 8.dp)
+                )
+            }
+
+            // Lista de pistas
+            itemsIndexed(
+                items = sortedSongs,
+                key = { _, song -> song.id }
+            ) { _, song ->
                 SongRow(song = song) {
                     val current = controller ?: return@SongRow
                     val targetMediaId = song.id.toString()
