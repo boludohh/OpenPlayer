@@ -707,14 +707,14 @@ class BassPlayerAdapter(
                 }
 
                 // Buscar en el primer paquete
-                if (read >= 8 && header[0] == 0x01.toByte() && 
+                if (read >= 8 && header[0] == 0x01.toByte() &&
                     header[1] == 'v'.code.toByte() && header[2] == 'o'.code.toByte() &&
                     header[3] == 'r'.code.toByte() && header[4] == 'b'.code.toByte() &&
                     header[5] == 'i'.code.toByte() && header[6] == 's'.code.toByte()) {
                     return "vorbis"
                 }
 
-                if (read >= 8 && header[0] == 'O'.code.toByte() && 
+                if (read >= 8 && header[0] == 'O'.code.toByte() &&
                     header[1] == 'p'.code.toByte() && header[2] == 'u'.code.toByte() &&
                     header[3] == 's'.code.toByte() && header[4] == 'H'.code.toByte() &&
                     header[5] == 'e'.code.toByte() && header[6] == 'a'.code.toByte() &&
@@ -722,7 +722,7 @@ class BassPlayerAdapter(
                     return "opus"
                 }
 
-                if (read >= 5 && header[0] == 0x7F.toByte() && 
+                if (read >= 5 && header[0] == 0x7F.toByte() &&
                     header[1] == 'F'.code.toByte() && header[2] == 'L'.code.toByte() &&
                     header[3] == 'A'.code.toByte() && header[4] == 'C'.code.toByte()) {
                     return "flac"
@@ -803,7 +803,7 @@ class BassPlayerAdapter(
         }
         if (nextHandle != 0) {
             BASSmix.BASS_Mixer_ChannelRemove(nextHandle)
-            BASS.BASS.StreamFree(nextHandle)
+            BASS.BASS_StreamFree(nextHandle)
             nextHandle = 0
         }
         nextScheduled = false

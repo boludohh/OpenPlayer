@@ -26,7 +26,6 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.collectLatest
-import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
@@ -221,13 +220,15 @@ class PlaybackService : MediaLibraryService() {
      *
      * Usa [collectLatest] para cancelar automáticamente la suscripción
      * anterior cuando cambia el queueId, evitando fugas de memoria.
+     * Nota: StateFlow ya garantiza no emitir valores consecutivos iguales,
+     * por lo que no se necesita distinctUntilChanged() (sería redundante).
      */
     private fun subscribeToLibraryChanges() {
         val audioRepository = (application as OpenPlayerApplication).audioRepository
         val bassPlayer = player ?: return
 
         serviceScope.launch {
-            bassPlayer.queueIdFlow.distinctUntilChanged().collectLatest { queueId ->
+            bassPlayer.queueIdFlow.collectLatest { queueId ->
                 // Seleccionar el Flow correcto según el queueId
                 val songsFlow = when {
                     queueId == BassPlayerAdapter.QUEUE_LIBRARY -> {
