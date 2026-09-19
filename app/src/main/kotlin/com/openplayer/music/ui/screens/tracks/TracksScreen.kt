@@ -10,12 +10,14 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -55,9 +57,16 @@ private const val DEBUG_TAG = "QueueDebug"
  * dibujando un gradiente vertical del color de fondo principal (opaco en
  * el tope) a transparente. El extremo opaco oculta la línea de recorte
  * dura del viewport, y las pistas que suben hacia el panel fijo se
- * desvanecen suavemente dentro de esta franja. Visible pero no exagerado.
+ * desvanecen suavemente dentro de esta franja.
  */
-private val TopFadeHeight = 32.dp
+private val TopFadeHeight = 64.dp
+
+/**
+ * Distancia de scroll (en dp) necesaria para que el fade alcance su
+ * alfa máximo (1.0). El fade se enciende progresivamente desde 0 hasta
+ * este umbral, evitando un encendido brusco de un frame a otro.
+ */
+private val ScrollFadeThreshold = 48.dp
 
 /**
  * Pantalla de pistas de OpenPlayer.
@@ -72,18 +81,22 @@ private val TopFadeHeight = 32.dp
  * con queueId "tracksByDate" para que el orden de reproducción respete
  * el orden visual (por fecha descendente).
  *
- * **Efecto fade superior**: se dibuja un gradiente vertical en el tope
- * del área de scroll (de color de fondo opaco a transparente hacia abajo),
- * de modo que las pistas que suben hacia el panel fijo de los iconos se
- * desvanecen suavemente contra el fondo principal en lugar de cortarse
- * de golpe. El viewport del scroll comienza en 43dp bajo la barra de
- * estado (base de glifos 35dp + 8dp de respiro, definido en MainScreen),
- * por lo que ningún contenido pasa detrás de los iconos.
+ * **Efecto fade superior condicional**: se dibuja un gradiente vertical
+ * en el tope del área de scroll (de color de fondo opaco a transparente
+ * hacia abajo), pero SOLO cuando el usuario hace scroll. En reposo
+ * (lista arriba, sin scroll) el fade está apagado (alfa 0), por lo que
+ * no afecta al texto de conteo ni a la primera pista. Apenas se detecta
+ * scroll, el fade se enciende progresivamente (0 → 1) hasta alcanzar
+ * su intensidad máxima tras 48dp de recorrido. Permanece activo mientras
+ * el usuario esté dentro de la lista, y se apaga automáticamente al
+ * volver al inicio (primera pista visible con offset 0). El viewport
+ * del scroll comienza en 43dp bajo la barra de estado (base de glifos
+ * 35dp + 8dp de respiro, definido en MainScreen), por lo que ningún
+ * contenido pasa detrás de los iconos.
  *
  * **Texto de conteo dentro del scroll**: el texto "X pistas" forma
  * parte del LazyColumn (primer item), por lo que sube junto con las
- * canciones al hacer scroll. Descansa por debajo de la franja de fade
- * para verse nítido en reposo. Los iconos de la barra superior
+ * canciones al hacer scroll. Los iconos de la barra superior
  * (TopActionBar) permanecen fijos en MainScreen.
  *
  * **Esta pantalla no realiza extracción de portadas.**
@@ -100,6 +113,32 @@ fun TracksScreen(
     val coverRepository = remember { CoverRepository(context) }
     val tracksCountTextColor = LocalTracksCountTextColor.current
     val backgroundColor = MaterialTheme.colorScheme.background
+    val listState = rememberLazyListState()
+
+    // Calcular el alfa del fade basado en la posición de scroll.
+    // - 0 cuando la lista está en reposo (primera pista visible, offset 0).
+    // - 1 cuando el scroll supera ScrollFadeThreshold (48dp de recorrido).
+    // - Valores intermedios para una transición suave.
+    val fadeAlpha by remember {
+        derivedStateOf {
+            val firstVisibleIndex = listState.firstVisibleItemIndex
+            val firstVisibleOffset = listState.firstVisibleItemScrollOffset
+
+            if (firstVisibleIndex == 0 && firstVisibleOffset == 0) {
+                0f
+            } else {
+                val thresholdPx = ScrollFadeThreshold.toPx()
+                val scrollDistance = if (firstVisibleIndex > 0) {
+                    // Ya pasamos el primer item, fade al máximo
+                    thresholdPx
+                } else {
+                    // Estamos en el primer item pero con offset, calcular proporción
+                    firstVisibleOffset.toFloat()
+                }
+                (scrollDistance / thresholdPx).coerceIn(0f, 1f)
+            }
+        }
+    }
 
     // Ordenar por fecha de agregada descendente (más recientes primero)
     val sortedSongs = remember(songs) {
@@ -141,35 +180,39 @@ fun TracksScreen(
             .fillMaxSize()
             .background(backgroundColor)
     ) {
-        // LazyColumn con efecto fade en el borde superior.
+        // LazyColumn con efecto fade condicional en el borde superior.
         // El fade se dibuja DESPUÉS del contenido (drawContent() primero),
-        // por lo que cubre las pistas que suben hacia el panel fijo con un
-        // gradiente vertical del color de fondo (opaco en el tope del
-        // viewport, ocultando el recorte duro) a transparente hacia abajo.
+        // y solo cuando fadeAlpha > 0 (es decir, cuando hay scroll).
+        // El gradiente va de color de fondo (opaco) a transparente,
+        // multiplicado por fadeAlpha para que en reposo no se dibuje nada.
         LazyColumn(
+            state = listState,
             modifier = Modifier
                 .fillMaxSize()
                 .drawWithContent {
                     drawContent()
-                    // Gradiente vertical en el borde superior
-                    val fadeHeightPx = TopFadeHeight.toPx()
-                    drawRect(
-                        brush = Brush.verticalGradient(
-                            colors = listOf(backgroundColor, Color.Transparent),
-                            startY = 0f,
-                            endY = fadeHeightPx
-                        ),
-                        topLeft = Offset.Zero,
-                        size = Size(size.width, fadeHeightPx)
-                    )
+                    // Solo dibujar el fade si hay scroll activo
+                    if (fadeAlpha > 0f) {
+                        val fadeHeightPx = TopFadeHeight.toPx()
+                        drawRect(
+                            brush = Brush.verticalGradient(
+                                colors = listOf(
+                                    backgroundColor.copy(alpha = fadeAlpha),
+                                    Color.Transparent
+                                ),
+                                startY = 0f,
+                                endY = fadeHeightPx
+                            ),
+                            topLeft = Offset.Zero,
+                            size = Size(size.width, fadeHeightPx)
+                        )
+                    }
                 }
         ) {
             // Texto de conteo de pistas como primer item del scroll.
             // Sube junto con las canciones al hacer scroll.
-            // top = 32dp: el texto descansa exactamente en el fin de la
-            //   franja de fade superior (viewport en 43dp + 32dp de fade =
-            //   75dp bajo la barra de estado), por lo que en reposo se ve
-            //   nítido y sin desvanecer.
+            // top = 32dp: el texto descansa con un margen cómodo bajo el
+            //   panel fijo de los iconos. En reposo (sin fade) se ve nítido.
             // start = 23dp: alineado con el glifo del primer icono de la
             //   barra superior (15dp de padding del Row + 8dp de centrado
             //   del icono de 26dp dentro de su área de toque de 44dp).
