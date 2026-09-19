@@ -142,23 +142,12 @@ fun TracksScreen(
                     Log.d(DEBUG_TAG, "TracksScreen: user tapped song | mediaId=$targetMediaId | title=${song.title}")
 
                     coroutineScope.launch {
-                        val index = (0 until current.mediaItemCount).indexOfFirst {
-                            current.getMediaItemAt(it).mediaId == targetMediaId
-                        }
-
-                        Log.d(DEBUG_TAG, "TracksScreen: found song in controller at index=$index (controller has ${current.mediaItemCount} items)")
-
-                        if (index >= 0) {
-                            // La canción ya está en la cola del controller: solo hacer seek
-                            Log.d(DEBUG_TAG, "TracksScreen: song already in queue, seeking to index $index")
-                            current.seekTo(index, 0L)
-                            current.play()
-                        } else if (mediaItems.isNotEmpty()) {
-                            // Primera reproducción desde esta pantalla: cargar cola con queueId
+                        if (mediaItems.isNotEmpty()) {
+                            // Encontrar el índice de la canción en la lista ordenada por fecha
                             val startIndex = mediaItems.indexOfFirst { it.mediaId == targetMediaId }
                                 .coerceAtLeast(0)
                             
-                            Log.d(DEBUG_TAG, "TracksScreen: first play, loading queue with queueId=${BassPlayerAdapter.QUEUE_TRACKS_BY_DATE} | startIndex=$startIndex | totalItems=${mediaItems.size}")
+                            Log.d(DEBUG_TAG, "TracksScreen: loading queue with queueId=${BassPlayerAdapter.QUEUE_TRACKS_BY_DATE} | startIndex=$startIndex | totalItems=${mediaItems.size}")
                             
                             // Agregar queueId al tag del primer MediaItem
                             val taggedMediaItems = mediaItems.mapIndexed { i, item ->
@@ -174,6 +163,7 @@ fun TracksScreen(
                                 }
                             }
                             
+                            // Reemplazar la cola del controller con la cola ordenada por fecha
                             current.setMediaItems(taggedMediaItems, startIndex, 0L)
                             current.prepare()
                             current.play()
