@@ -22,6 +22,7 @@
     <string name="choose_language_title">Choose your language</string>
     <string name="cd_change_theme">Change theme</string>
     <string name="cd_playback_engine">Switch playback engine</string>
+    <string name="cd_more_options">More options</string>
     <string name="language_es">Spanish</string>
     <string name="language_en">English</string>
     <string name="language_pt_br">Portuguese (Brazil)</string>

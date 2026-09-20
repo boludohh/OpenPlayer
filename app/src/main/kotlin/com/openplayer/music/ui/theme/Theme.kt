@@ -92,6 +92,19 @@ val LocalListItemTitleColor = compositionLocalOf { Color.Black }
 val LocalListItemSubtitleColor = compositionLocalOf { Color.Gray }
 
 /**
+ * Color para metadatos de ítem de lista (texto de duración de pista,
+ * icono de más opciones, etc.). Genérico y reutilizable en
+ * Tracks/Albums/Artists/Playlists.
+ * Reutiliza los mismos colores que los iconos de navegación inactivos.
+ *
+ * Valores:
+ * - Claro: #A3A3A3
+ * - Oscuro: #8C8C8C
+ * - AMOLED: #737373
+ */
+val LocalListItemMetaColor = compositionLocalOf { Color.Gray }
+
+/**
  * Color del icono dentro del placeholder de carátula (cuando una canción
  * no tiene portada extraída). Genérico y reutilizable en Tracks/Albums.
  * Reutiliza los mismos colores que los iconos de navegación inactivos.
@@ -261,6 +274,12 @@ fun OpenPlayerTheme(
         ThemeMode.AMOLED -> AmoledTracksCountText
     }
 
+    val listItemMetaColor = when (themeMode) {
+        ThemeMode.LIGHT -> LightNavIconInactive
+        ThemeMode.DARK -> DarkNavIconInactive
+        ThemeMode.AMOLED -> AmoledNavIconInactive
+    }
+
     val coverPlaceholderIconColor = when (themeMode) {
         ThemeMode.LIGHT -> LightNavIconInactive
         ThemeMode.DARK -> DarkNavIconInactive
@@ -276,6 +295,7 @@ fun OpenPlayerTheme(
         LocalScreenTitleColor provides screenTitleColor,
         LocalListItemTitleColor provides listItemTitleColor,
         LocalListItemSubtitleColor provides listItemSubtitleColor,
+        LocalListItemMetaColor provides listItemMetaColor,
         LocalCoverPlaceholderIconColor provides coverPlaceholderIconColor
     ) {
         MaterialTheme(

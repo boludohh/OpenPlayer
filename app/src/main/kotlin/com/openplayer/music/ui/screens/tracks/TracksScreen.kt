@@ -308,6 +308,11 @@ fun TracksScreen(
                                 current.play()
                             }
                         }
+                    },
+                    onMoreClick = {
+                        // TODO: futuro menú de opciones de la pista
+                        // (añadir a playlist, compartir, detalles, etc.).
+                        // Por ahora el icono es solo visual.
                     }
                 )
             }
