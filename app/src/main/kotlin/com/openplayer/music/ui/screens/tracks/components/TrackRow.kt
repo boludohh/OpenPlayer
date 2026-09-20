@@ -56,10 +56,11 @@ import java.io.File
  * - **Duración** (derecha, 13sp): duración real de la pista en
  *   formato mm:ss (o h:mm:ss), centrada verticalmente.
  * - **Icono more vert** (extremo derecho): glifo de 24dp dentro de
- *   un área de toque de 44dp situada a 15dp del borde derecho (el
- *   mismo margen que el icono de búsqueda en TopActionBar). Centrado
- *   verticalmente, con callback [onMoreClick] independiente del tap
- *   de reproducción de la fila.
+ *   un área de toque de 44×64dp situada a 15dp del borde derecho
+ *   (el mismo margen que el icono de búsqueda en TopActionBar).
+ *   Centrado verticalmente por construcción: 20dp de padding
+ *   óptico superior e inferior (20 + 24 + 20 = 64dp). Con callback
+ *   [onMoreClick] independiente del tap de reproducción de la fila.
  *
  * ## Separaciones ópticas
  * - Carátula al borde izquierdo: 24dp (igual que el margen del
@@ -188,13 +189,20 @@ fun TrackRow(
         // toque = 16dp ópticos entre la duración y el glifo more vert.
         Spacer(modifier = Modifier.width(6.dp))
 
-        // Icono more vert: glifo de 24dp centrado en área de toque de
-        // 44dp, a 15dp del borde derecho (mismo margen que la búsqueda).
-        // Su click es independiente del tap de reproducción de la fila.
+        // Icono more vert: área de toque de 44×64dp (toda la altura
+        // del contenedor), con padding vertical óptico de 20dp arriba
+        // y abajo para centrar el glifo de 24dp por construcción
+        // (20 + 24 + 20 = 64dp). El centro horizontal del glifo queda
+        // a 37dp del borde derecho del contenedor, alineado con el
+        // icono de búsqueda del TopActionBar. El clickable consume el
+        // evento antes de que llegue al Row, por lo que el tap en el
+        // more vert no dispara la reproducción de la fila.
         Box(
             modifier = Modifier
-                .size(44.dp)
-                .clickable(onClick = onMoreClick),
+                .width(44.dp)
+                .fillMaxHeight()
+                .clickable(onClick = onMoreClick)
+                .padding(vertical = 20.dp),
             contentAlignment = Alignment.Center
         ) {
             Icon(
