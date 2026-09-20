@@ -9,6 +9,7 @@ datastore = "1.2.1"
 ksp = "2.3.11"
 room = "2.8.4"
 media3 = "1.11.0"
+coil = "3.6.3"
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
@@ -31,3 +32,5 @@ androidx-room-runtime = { group = "androidx.room", name = "room-runtime", versio
 androidx-room-ktx = { group = "androidx.room", name = "room-ktx", version.ref = "room" }
 androidx-room-compiler = { group = "androidx.room", name = "room-compiler", version.ref = "room" }
 media3-session = { group = "androidx.media3", name = "media3-session", version.ref = "media3" }
+coil-compose = { module = "io.coil-kt.coil3:coil-compose", version.ref = "coil" }
+coil-network-okhttp = { module = "io.coil-kt.coil3:coil-network-okhttp", version.ref = "coil" }

@@ -67,6 +67,42 @@ val LocalTracksCountTextColor = compositionLocalOf { Color.Gray }
  */
 val LocalScreenTitleColor = compositionLocalOf { Color.Black }
 
+/**
+ * Color para títulos de ítem de lista (título de pista, nombre de álbum, etc.).
+ * Genérico y reutilizable en Tracks/Albums/Artists/Playlists.
+ * Reutiliza los mismos colores que los iconos de la barra superior.
+ *
+ * Valores:
+ * - Claro: #1A1A1A
+ * - Oscuro: #F5F5F5
+ * - AMOLED: #E5E5E5
+ */
+val LocalListItemTitleColor = compositionLocalOf { Color.Black }
+
+/**
+ * Color para subtítulos de ítem de lista (artista de pista, cantidad de
+ * canciones, etc.). Genérico y reutilizable en Tracks/Albums/Artists/Playlists.
+ * Reutiliza los mismos colores que el texto de conteo de pistas.
+ *
+ * Valores:
+ * - Claro: #525252
+ * - Oscuro: #B3B3B3
+ * - AMOLED: #A3A3A3
+ */
+val LocalListItemSubtitleColor = compositionLocalOf { Color.Gray }
+
+/**
+ * Color del icono dentro del placeholder de carátula (cuando una canción
+ * no tiene portada extraída). Genérico y reutilizable en Tracks/Albums.
+ * Reutiliza los mismos colores que los iconos de navegación inactivos.
+ *
+ * Valores:
+ * - Claro: #A3A3A3
+ * - Oscuro: #8C8C8C
+ * - AMOLED: #737373
+ */
+val LocalCoverPlaceholderIconColor = compositionLocalOf { Color.Gray }
+
 private val LightColors = lightColorScheme(
     primary = LightPrimary,
     onPrimary = LightOnPrimary,
@@ -213,13 +249,34 @@ fun OpenPlayerTheme(
         ThemeMode.AMOLED -> AmoledTopBarIcon
     }
 
+    val listItemTitleColor = when (themeMode) {
+        ThemeMode.LIGHT -> LightTopBarIcon
+        ThemeMode.DARK -> DarkTopBarIcon
+        ThemeMode.AMOLED -> AmoledTopBarIcon
+    }
+
+    val listItemSubtitleColor = when (themeMode) {
+        ThemeMode.LIGHT -> LightTracksCountText
+        ThemeMode.DARK -> DarkTracksCountText
+        ThemeMode.AMOLED -> AmoledTracksCountText
+    }
+
+    val coverPlaceholderIconColor = when (themeMode) {
+        ThemeMode.LIGHT -> LightNavIconInactive
+        ThemeMode.DARK -> DarkNavIconInactive
+        ThemeMode.AMOLED -> AmoledNavIconInactive
+    }
+
     CompositionLocalProvider(
         LocalFloatingIconColor provides floatingIconColor,
         LocalNavIconActiveColor provides navIconActiveColor,
         LocalNavIconInactiveColor provides navIconInactiveColor,
         LocalTopBarIconColor provides topBarIconColor,
         LocalTracksCountTextColor provides tracksCountTextColor,
-        LocalScreenTitleColor provides screenTitleColor
+        LocalScreenTitleColor provides screenTitleColor,
+        LocalListItemTitleColor provides listItemTitleColor,
+        LocalListItemSubtitleColor provides listItemSubtitleColor,
+        LocalCoverPlaceholderIconColor provides coverPlaceholderIconColor
     ) {
         MaterialTheme(
             colorScheme = colorScheme,

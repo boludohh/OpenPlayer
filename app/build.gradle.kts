@@ -23,8 +23,8 @@ android {
         applicationId = "com.openplayer.music"
         minSdk = 27
         targetSdk = 37
-        versionCode = 48
-        versionName = "0.17.2"
+        versionCode = 49
+        versionName = "0.18.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -126,6 +126,10 @@ dependencies {
 
     // Media3 MediaSession (notificación, controles, Bluetooth, Android Auto)
     implementation(libs.media3.session)
+
+    // Coil 3: carga de imágenes para carátulas de pistas (y futuro uso web)
+    implementation(libs.coil.compose)
+    implementation(libs.coil.network.okhttp)
 
     debugImplementation(libs.androidx.ui.tooling)
     debugImplementation(libs.androidx.ui.test.manifest)

@@ -3,7 +3,6 @@ package com.openplayer.music.ui.screens.tracks
 import android.content.ComponentName
 import android.util.Log
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -44,6 +43,7 @@ import com.openplayer.music.data.model.Song
 import com.openplayer.music.playback.engine.BassPlayerAdapter
 import com.openplayer.music.playback.service.PlaybackService
 import com.openplayer.music.playback.toMediaItem
+import com.openplayer.music.ui.screens.tracks.components.TrackRow
 import com.openplayer.music.ui.theme.LocalScreenTitleColor
 import com.openplayer.music.ui.theme.LocalTracksCountTextColor
 import com.openplayer.music.ui.theme.screenTitle
@@ -96,11 +96,17 @@ private val ScrollFadeThreshold = 48.dp
  * 35dp + 8dp de respiro, definido en MainScreen), por lo que ningún
  * contenido pasa detrás de los iconos.
  *
- * **Título y conteo dentro del scroll**: el título de la pestaña
- * ("Pistas") y el texto de conteo ("X pistas") forman parte del
- * LazyColumn (primer item), por lo que suben junto con las canciones
- * al hacer scroll. Los iconos de la barra superior (TopActionBar)
- * permanecen fijos en MainScreen.
+ * **Título, conteo y filas de pistas dentro del scroll**: los tres
+ * forman parte del LazyColumn, por lo que suben juntos con las
+ * canciones al hacer scroll. Los iconos de la barra superior
+ * (TopActionBar) permanecen fijos en MainScreen.
+ *
+ * **Carátulas vía Coil**: cada fila ([TrackRow]) muestra la carátula
+ * que TagLib extrajo durante el escaneo y que [CoverRepository] guardó
+ * en disco. Si una canción no tiene carátula, se muestra un
+ * placeholder con icono de nota musical. Las carátulas nunca se cruzan
+ * entre canciones gracias al key estable del LazyColumn y al cacheo de
+ * Coil por ruta de archivo.
  *
  * **Esta pantalla no realiza extracción de portadas.**
  * La extracción ya se hizo durante el escaneo en [AudioRepository].
@@ -252,72 +258,59 @@ fun TracksScreen(
                 }
             }
 
-            // Lista de pistas
+            // Lista de pistas con contenedores individuales y carátulas vía Coil.
+            // key = song.id garantiza identidad estable de cada fila, evitando
+            // que Coil mezcle carátulas al reciclar filas durante el scroll.
             itemsIndexed(
                 items = sortedSongs,
                 key = { _, song -> song.id }
             ) { _, song ->
-                SongRow(song = song) {
-                    val current = controller ?: return@SongRow
-                    val targetMediaId = song.id.toString()
+                // Archivo de portada en disco (síncrono, sin extracción bajo demanda).
+                // null si la canción no tiene portada extraída por TagLib.
+                val coverFile = remember(song.path) {
+                    coverRepository.coverFile(song.path)
+                }
 
-                    Log.d(DEBUG_TAG, "TracksScreen: user tapped song | mediaId=$targetMediaId | title=${song.title}")
+                TrackRow(
+                    song = song,
+                    coverFile = coverFile,
+                    onClick = {
+                        val current = controller ?: return@TrackRow
+                        val targetMediaId = song.id.toString()
 
-                    coroutineScope.launch {
-                        if (mediaItems.isNotEmpty()) {
-                            // Encontrar el índice de la canción en la lista ordenada por fecha
-                            val startIndex = mediaItems.indexOfFirst { it.mediaId == targetMediaId }
-                                .coerceAtLeast(0)
-                            
-                            Log.d(DEBUG_TAG, "TracksScreen: loading queue with queueId=${BassPlayerAdapter.QUEUE_TRACKS_BY_DATE} | startIndex=$startIndex | totalItems=${mediaItems.size}")
-                            
-                            // Agregar queueId al tag del primer MediaItem
-                            val taggedMediaItems = mediaItems.mapIndexed { i, item ->
-                                if (i == 0) {
-                                    androidx.media3.common.MediaItem.Builder()
-                                        .setMediaId(item.mediaId)
-                                        .setUri(item.localConfiguration?.uri)
-                                        .setMediaMetadata(item.mediaMetadata)
-                                        .setTag(BassPlayerAdapter.QUEUE_TRACKS_BY_DATE)
-                                        .build()
-                                } else {
-                                    item
+                        Log.d(DEBUG_TAG, "TracksScreen: user tapped song | mediaId=$targetMediaId | title=${song.title}")
+
+                        coroutineScope.launch {
+                            if (mediaItems.isNotEmpty()) {
+                                // Encontrar el índice de la canción en la lista ordenada por fecha
+                                val startIndex = mediaItems.indexOfFirst { it.mediaId == targetMediaId }
+                                    .coerceAtLeast(0)
+                                
+                                Log.d(DEBUG_TAG, "TracksScreen: loading queue with queueId=${BassPlayerAdapter.QUEUE_TRACKS_BY_DATE} | startIndex=$startIndex | totalItems=${mediaItems.size}")
+                                
+                                // Agregar queueId al tag del primer MediaItem
+                                val taggedMediaItems = mediaItems.mapIndexed { i, item ->
+                                    if (i == 0) {
+                                        androidx.media3.common.MediaItem.Builder()
+                                            .setMediaId(item.mediaId)
+                                            .setUri(item.localConfiguration?.uri)
+                                            .setMediaMetadata(item.mediaMetadata)
+                                            .setTag(BassPlayerAdapter.QUEUE_TRACKS_BY_DATE)
+                                            .build()
+                                    } else {
+                                        item
+                                    }
                                 }
+                                
+                                // Reemplazar la cola del controller con la cola ordenada por fecha
+                                current.setMediaItems(taggedMediaItems, startIndex, 0L)
+                                current.prepare()
+                                current.play()
                             }
-                            
-                            // Reemplazar la cola del controller con la cola ordenada por fecha
-                            current.setMediaItems(taggedMediaItems, startIndex, 0L)
-                            current.prepare()
-                            current.play()
                         }
                     }
-                }
+                )
             }
         }
-    }
-}
-
-/**
- * Fila de canción que muestra título y artista.
- * Al tocarla inicia la reproducción de esa canción.
- */
-@Composable
-private fun SongRow(song: Song, onClick: () -> Unit) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 8.dp)
-    ) {
-        Text(
-            text = song.title,
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onBackground
-        )
-        Text(
-            text = song.artist,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
     }
 }
