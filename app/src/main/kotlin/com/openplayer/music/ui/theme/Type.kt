@@ -16,6 +16,12 @@ val LinotteFontFamily = FontFamily(
     Font(R.font.linotte, FontWeight.Bold)
 )
 
+// Familia de fuentes personalizada usando titan_one_regular.ttf
+// Usada para títulos de pantalla (screenTitle) en todas las pestañas
+val TitanOneFontFamily = FontFamily(
+    Font(R.font.titan_one_regular, FontWeight.Normal)
+)
+
 val Typography = Typography(
     displayLarge = TextStyle(
         fontFamily = LinotteFontFamily,
@@ -79,6 +85,15 @@ val Typography = Typography(
         fontSize = 14.sp,
         lineHeight = 20.sp,
         letterSpacing = 0.1.sp
+    ),
+    // Estilo para títulos de pantalla (Pistas, Álbumes, Artistas, etc.)
+    // Usa Titan One, 36sp, para destacar visualmente el nombre de la pestaña
+    screenTitle = TextStyle(
+        fontFamily = TitanOneFontFamily,
+        fontWeight = FontWeight.Normal,
+        fontSize = 36.sp,
+        lineHeight = 44.sp,
+        letterSpacing = 0.sp
     ),
     bodyLarge = TextStyle(
         fontFamily = LinotteFontFamily,

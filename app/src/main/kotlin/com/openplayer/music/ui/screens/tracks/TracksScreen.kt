@@ -34,7 +34,6 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
@@ -45,6 +44,7 @@ import com.openplayer.music.data.model.Song
 import com.openplayer.music.playback.engine.BassPlayerAdapter
 import com.openplayer.music.playback.service.PlaybackService
 import com.openplayer.music.playback.toMediaItem
+import com.openplayer.music.ui.theme.LocalScreenTitleColor
 import com.openplayer.music.ui.theme.LocalTracksCountTextColor
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -95,10 +95,11 @@ private val ScrollFadeThreshold = 48.dp
  * 35dp + 8dp de respiro, definido en MainScreen), por lo que ningún
  * contenido pasa detrás de los iconos.
  *
- * **Texto de conteo dentro del scroll**: el texto "X pistas" forma
- * parte del LazyColumn (primer item), por lo que sube junto con las
- * canciones al hacer scroll. Los iconos de la barra superior
- * (TopActionBar) permanecen fijos en MainScreen.
+ * **Título y conteo dentro del scroll**: el título de la pestaña
+ * ("Pistas") y el texto de conteo ("X pistas") forman parte del
+ * LazyColumn (primer item), por lo que suben junto con las canciones
+ * al hacer scroll. Los iconos de la barra superior (TopActionBar)
+ * permanecen fijos en MainScreen.
  *
  * **Esta pantalla no realiza extracción de portadas.**
  * La extracción ya se hizo durante el escaneo en [AudioRepository].
@@ -112,6 +113,7 @@ fun TracksScreen(
     val songs by audioRepository.songs.collectAsState(initial = emptyList())
     val coroutineScope = rememberCoroutineScope()
     val coverRepository = remember { CoverRepository(context) }
+    val screenTitleColor = LocalScreenTitleColor.current
     val tracksCountTextColor = LocalTracksCountTextColor.current
     val backgroundColor = MaterialTheme.colorScheme.background
     val listState = rememberLazyListState()
@@ -213,23 +215,40 @@ fun TracksScreen(
                     }
                 }
         ) {
-            // Texto de conteo de pistas como primer item del scroll.
-            // Sube junto con las canciones al hacer scroll.
-            // top = 32dp: el texto descansa con un margen cómodo bajo el
-            //   panel fijo de los iconos. En reposo (sin fade) se ve nítido.
-            // start = 23dp: alineado con el glifo del primer icono de la
-            //   barra superior (15dp de padding del Row + 8dp de centrado
-            //   del icono de 26dp dentro de su área de toque de 44dp).
-            item(key = "tracks_count_header") {
-                Text(
-                    text = stringResource(R.string.main_songs_count, sortedSongs.size),
-                    style = MaterialTheme.typography.bodyLarge.copy(fontSize = 15.sp),
-                    color = tracksCountTextColor,
-                    textAlign = TextAlign.Start,
+            // Header con título de pestaña y conteo de pistas como primer item del scroll.
+            // Suben juntos con las canciones al hacer scroll.
+            // Geometría óptica (bajo la barra de estado):
+            // - Base de iconos: 35dp
+            // - Título: 35 + 20 = 55dp (compensando ~4dp de leading de fuente 36sp)
+            // - Viewport del scroll: 43dp (definido en MainScreen)
+            // - Padding top del título: 55 - 43 - 4 = 8dp (compensación óptica)
+            // - Conteo: 8dp debajo del título
+            // - Lista: 24dp debajo del conteo
+            // - start = 24dp: alineado con el glifo del icono de menú
+            //   (15dp del Row + 9dp de centrado del glifo de 26dp en área de 44dp)
+            item(key = "tracks_header") {
+                Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(start = 23.dp, top = 32.dp, end = 15.dp, bottom = 8.dp)
-                )
+                        .padding(start = 24.dp, top = 8.dp, end = 15.dp)
+                ) {
+                    // Título de pestaña
+                    Text(
+                        text = stringResource(R.string.tracks_screen_placeholder),
+                        style = MaterialTheme.typography.screenTitle,
+                        color = screenTitleColor,
+                        textAlign = TextAlign.Start
+                    )
+
+                    // Conteo de pistas (8dp debajo del título)
+                    Text(
+                        text = stringResource(R.string.main_songs_count, sortedSongs.size),
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = tracksCountTextColor,
+                        textAlign = TextAlign.Start,
+                        modifier = Modifier.padding(top = 8.dp, bottom = 24.dp)
+                    )
+                }
             }
 
             // Lista de pistas

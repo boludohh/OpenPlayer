@@ -49,11 +49,23 @@ val LocalTopBarIconColor = compositionLocalOf { Color.Black }
  * Se provee mediante CompositionLocal para acceso global según el tema.
  *
  * Valores:
+ * - Claro: #525252
+ * - Oscuro: #B3B3B3
+ * - AMOLED: #A3A3A3
+ */
+val LocalTracksCountTextColor = compositionLocalOf { Color.Gray }
+
+/**
+ * Color para el título de pantalla (Pistas, Álbumes, Artistas, etc.).
+ * Se provee mediante CompositionLocal para acceso global según el tema.
+ * Reutiliza los mismos colores que los iconos de la barra superior.
+ *
+ * Valores:
  * - Claro: #1A1A1A
  * - Oscuro: #F5F5F5
  * - AMOLED: #E5E5E5
  */
-val LocalTracksCountTextColor = compositionLocalOf { Color.Black }
+val LocalScreenTitleColor = compositionLocalOf { Color.Black }
 
 private val LightColors = lightColorScheme(
     primary = LightPrimary,
@@ -195,12 +207,19 @@ fun OpenPlayerTheme(
         ThemeMode.AMOLED -> AmoledTracksCountText
     }
 
+    val screenTitleColor = when (themeMode) {
+        ThemeMode.LIGHT -> LightTopBarIcon
+        ThemeMode.DARK -> DarkTopBarIcon
+        ThemeMode.AMOLED -> AmoledTopBarIcon
+    }
+
     CompositionLocalProvider(
         LocalFloatingIconColor provides floatingIconColor,
         LocalNavIconActiveColor provides navIconActiveColor,
         LocalNavIconInactiveColor provides navIconInactiveColor,
         LocalTopBarIconColor provides topBarIconColor,
-        LocalTracksCountTextColor provides tracksCountTextColor
+        LocalTracksCountTextColor provides tracksCountTextColor,
+        LocalScreenTitleColor provides screenTitleColor
     ) {
         MaterialTheme(
             colorScheme = colorScheme,
