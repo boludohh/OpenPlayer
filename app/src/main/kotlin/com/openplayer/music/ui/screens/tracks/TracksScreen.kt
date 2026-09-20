@@ -46,6 +46,7 @@ import com.openplayer.music.playback.service.PlaybackService
 import com.openplayer.music.playback.toMediaItem
 import com.openplayer.music.ui.theme.LocalScreenTitleColor
 import com.openplayer.music.ui.theme.LocalTracksCountTextColor
+import com.openplayer.music.ui.theme.screenTitle
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
