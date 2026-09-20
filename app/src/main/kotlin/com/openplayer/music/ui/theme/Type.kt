@@ -86,15 +86,6 @@ val Typography = Typography(
         lineHeight = 20.sp,
         letterSpacing = 0.1.sp
     ),
-    // Estilo para títulos de pantalla (Pistas, Álbumes, Artistas, etc.)
-    // Usa Titan One, 36sp, para destacar visualmente el nombre de la pestaña
-    screenTitle = TextStyle(
-        fontFamily = TitanOneFontFamily,
-        fontWeight = FontWeight.Normal,
-        fontSize = 36.sp,
-        lineHeight = 44.sp,
-        letterSpacing = 0.sp
-    ),
     bodyLarge = TextStyle(
         fontFamily = LinotteFontFamily,
         fontWeight = FontWeight.Normal,
@@ -138,3 +129,18 @@ val Typography = Typography(
         letterSpacing = 0.5.sp
     )
 )
+
+/**
+ * Estilo para títulos de pantalla (Pistas, Álbumes, Artistas, etc.).
+ * Usa Titan One, 36sp, para destacar visualmente el nombre de la pestaña.
+ * Definido como propiedad de extensión de Typography para permitir
+ * acceso vía MaterialTheme.typography.screenTitle.
+ */
+val Typography.screenTitle: TextStyle
+    get() = TextStyle(
+        fontFamily = TitanOneFontFamily,
+        fontWeight = FontWeight.Normal,
+        fontSize = 36.sp,
+        lineHeight = 44.sp,
+        letterSpacing = 0.sp
+    )
