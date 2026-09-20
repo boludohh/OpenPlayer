@@ -124,6 +124,12 @@ private fun maxDistance(point: Offset, size: Size): Float {
  *   visual del layout en Compose. Compatible con API 27–37 sin depender
  *   de applyOverrideConfiguration().
  *
+ * Tipografía por idioma:
+ * - [currentLanguage] se utiliza para determinar la familia de fuentes:
+ *   IBM Plex Sans Arabic si el idioma es "ar", IBM Plex Sans por defecto.
+ * - Se provee LocalAppFontFamily para que todos los componentes de
+ *   tipografía usen la familia correcta automáticamente.
+ *
  * Barras del sistema:
  * - Actualiza dinámicamente la apariencia de los iconos de las barras
  *   de estado y navegación (isAppearanceLightStatusBars e
@@ -196,6 +202,14 @@ fun ThemeSwitcherHost(
         LayoutDirection.Ltr
     }
 
+    // Familia de fuentes según el idioma actual: IBM Plex Sans Arabic
+    // si el idioma es "ar", IBM Plex Sans por defecto.
+    val fontFamily = if (currentLanguage == LocaleManager.LANGUAGE_AR) {
+        IBMPlexSansArabicFamily
+    } else {
+        IBMPlexSansFamily
+    }
+
     // Actualiza dinámicamente la apariencia de las barras del sistema
     // (iconos oscuros en tema claro, iconos claros en tema oscuro/AMOLED)
     // cada vez que cambia el tema activo.
@@ -216,7 +230,8 @@ fun ThemeSwitcherHost(
     CompositionLocalProvider(
         LocalThemeSwitch provides switchTheme,
         LocalLayoutDirection provides layoutDirection,
-        LocalThemeSwitchState provides switchState
+        LocalThemeSwitchState provides switchState,
+        LocalAppFontFamily provides fontFamily
     ) {
         Box(
             Modifier

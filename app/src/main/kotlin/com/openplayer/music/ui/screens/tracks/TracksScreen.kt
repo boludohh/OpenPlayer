@@ -242,7 +242,7 @@ fun TracksScreen(
                     // Título de pestaña
                     Text(
                         text = stringResource(R.string.tracks_screen_placeholder),
-                        style = MaterialTheme.typography.screenTitle,
+                        style = screenTitle(),
                         color = screenTitleColor,
                         textAlign = TextAlign.Start
                     )

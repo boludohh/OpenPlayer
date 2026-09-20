@@ -7,6 +7,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontFamily
 
 /**
  * Color custom para los iconos flotantes de la pantalla de bienvenida.
@@ -116,6 +117,18 @@ val LocalListItemMetaColor = compositionLocalOf { Color.Gray }
  */
 val LocalCoverPlaceholderIconColor = compositionLocalOf { Color.Gray }
 
+/**
+ * Familia de fuentes activa según el idioma actual.
+ * Se provee mediante CompositionLocal en ThemeSwitcherHost para que
+ * todos los componentes de tipografía usen la familia correcta:
+ * - IBM Plex Sans para idiomas no árabes (es, en, pt, pt-BR, fr)
+ * - IBM Plex Sans Arabic para árabe (ar)
+ *
+ * Los estilos de tipografía (bodyLarge, screenTitle, etc.) leen este
+ * CompositionLocal y usan la familia apropiada automáticamente.
+ */
+val LocalAppFontFamily = compositionLocalOf { IBMPlexSansFamily }
+
 private val LightColors = lightColorScheme(
     primary = LightPrimary,
     onPrimary = LightOnPrimary,
@@ -211,9 +224,12 @@ private val AmoledColors = darkColorScheme(
  * quedan deliberadamente desactivados: OpenPlayer siempre usa sus
  * propios colores definidos para cada tema.
  *
- * También provee [LocalFloatingIconColor] con el color específico
- * para los iconos flotantes de la pantalla de bienvenida, adaptado
- * al tema activo.
+ * La tipografía se construye usando la familia provista por
+ * [LocalAppFontFamily], que es provista por ThemeSwitcherHost según
+ * el idioma activo (IBM Plex Sans o IBM Plex Sans Arabic).
+ *
+ * También provee los CompositionLocales de colores personalizados
+ * para que los componentes accedan a colores semánticos según el tema.
  */
 @Composable
 fun OpenPlayerTheme(
@@ -286,6 +302,9 @@ fun OpenPlayerTheme(
         ThemeMode.AMOLED -> AmoledNavIconInactive
     }
 
+    // Construir tipografía usando la familia provista por LocalAppFontFamily
+    val typography = buildTypography(LocalAppFontFamily.current)
+
     CompositionLocalProvider(
         LocalFloatingIconColor provides floatingIconColor,
         LocalNavIconActiveColor provides navIconActiveColor,
@@ -300,7 +319,7 @@ fun OpenPlayerTheme(
     ) {
         MaterialTheme(
             colorScheme = colorScheme,
-            typography = Typography,
+            typography = typography,
             content = content
         )
     }
