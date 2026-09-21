@@ -124,8 +124,8 @@ val LocalCoverPlaceholderIconColor = compositionLocalOf { Color.Gray }
  *
  * Valores:
  * - Claro: #E8E8E8
- * - Oscuro: #202020
- * - AMOLED: #101010
+ * - Oscuro: #181818
+ * - AMOLED: #070707
  */
 val LocalCurrentTrackColor = compositionLocalOf { Color.Gray }
 
