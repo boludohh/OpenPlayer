@@ -26,7 +26,6 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.collectLatest
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -49,10 +48,9 @@ import kotlinx.coroutines.withContext
  * - Decidir si el servicio sobrevive en onTaskRemoved: si el usuario
  *   cierra la app mientras suena música, la reproducción continúa;
  *   si está pausada, el servicio se detiene.
- * - **Sincronización reactiva global de playlist**: observa el queueId
- *   del adapter y se suscribe al Flow de canciones correspondiente
- *   (biblioteca completa, filtrada por álbum, por artista, etc.),
- *   actualizando automáticamente la cola cuando cambian los datos.
+ * - **Sincronización reactiva de playlist**: se suscribe al Flow de
+ *   canciones de AudioRepository y actualiza automáticamente la cola
+ *   cuando cambian los datos, sin interrumpir la reproducción en curso.
  *
  * ## Optimizaciones de rendimiento
  * - El mapeo de canciones a MediaItems se ejecuta en `Dispatchers.IO`
@@ -214,86 +212,42 @@ class PlaybackService : MediaLibraryService() {
     }
 
     // =========================================================================
-    // Sincronización reactiva global de playlist
+    // Sincronización reactiva de playlist
     // =========================================================================
 
     /**
-     * Observa el queueId del adapter y se suscribe dinámicamente al
-     * Flow de canciones correspondiente. Cuando el queueId cambia
-     * (ej: usuario toca una canción en una pantalla diferente), cancela
-     * la suscripción anterior y crea una nueva según el nuevo contexto.
+     * Se suscribe al Flow de canciones de AudioRepository y actualiza
+     * la playlist del adapter cada vez que la biblioteca cambia.
      *
-     * Tipos de queueId soportados:
-     * - "library": biblioteca completa ordenada por título
-     * - "tracksByDate": biblioteca completa ordenada por fecha descendente
-     * - "album:{nombre}": canciones de un álbum específico, ordenadas por trackNumber
-     * - "artist:{nombre}": canciones de un artista específico, ordenadas por título
-     * - "playlist:{id}": (futuro) playlist personalizada
-     *
-     * Usa [collectLatest] para cancelar automáticamente la suscripción
-     * anterior cuando cambia el queueId, evitando fugas de memoria.
-     * Nota: StateFlow ya garantiza no emitir valores consecutivos iguales,
-     * por lo que no se necesita distinctUntilChanged() (sería redundante).
+     * El adapter ([BassPlayerAdapter]) se encarga internamente de:
+     - Reemplazar completamente la playlist si el queueId actual es
+     *   QUEUE_LIBRARY (cola global de biblioteca).
+     * - Hacer merge reactivo si el queueId es personalizado (ej.
+     *   QUEUE_TRACKS_BY_DATE): actualiza metadatos, elimina borrados,
+     *   conserva el orden, sin interrumpir la reproducción actual.
      *
      * **Optimización**: el mapeo de canciones a MediaItems (que incluye
      * stats de disco para verificar carátulas) se ejecuta en
      * `Dispatchers.IO` para no bloquear el hilo principal. Solo vuelve
      * a Main para entregar la lista al adapter.
+     *
+     * Usa [collectLatest] para cancelar automáticamente la emisión
+     * anterior si llega una nueva antes de terminar el mapeo, evitando
+     * trabajo redundante.
      */
     private fun subscribeToLibraryChanges() {
         val audioRepository = (application as OpenPlayerApplication).audioRepository
         val bassPlayer = player ?: return
 
-        serviceScope.launch {
-            bassPlayer.queueIdFlow.collectLatest { queueId ->
-                // Seleccionar el Flow correcto según el queueId
-                val songsFlow = when {
-                    queueId == BassPlayerAdapter.QUEUE_LIBRARY -> {
-                        // Biblioteca completa ordenada por título (orden del DAO)
-                        audioRepository.songs
-                    }
-                    queueId == BassPlayerAdapter.QUEUE_TRACKS_BY_DATE -> {
-                        // Biblioteca completa ordenada por fecha descendente
-                        audioRepository.songs.map { songs ->
-                            songs.sortedByDescending { it.dateAdded }
-                        }
-                    }
-                    queueId.startsWith(BassPlayerAdapter.QUEUE_ALBUM_PREFIX) -> {
-                        // Canciones de un álbum específico, ordenadas por trackNumber
-                        val albumName = queueId.removePrefix(BassPlayerAdapter.QUEUE_ALBUM_PREFIX)
-                        audioRepository.songs.map { songs ->
-                            songs.filter { it.album == albumName }
-                                .sortedBy { it.trackNumber ?: Int.MAX_VALUE }
-                        }
-                    }
-                    queueId.startsWith(BassPlayerAdapter.QUEUE_ARTIST_PREFIX) -> {
-                        // Canciones de un artista específico, ordenadas por título
-                        val artistName = queueId.removePrefix(BassPlayerAdapter.QUEUE_ARTIST_PREFIX)
-                        audioRepository.songs.map { songs ->
-                            songs.filter { it.artist == artistName }
-                                .sortedBy { it.title }
-                        }
-                    }
-                    queueId.startsWith(BassPlayerAdapter.QUEUE_PLAYLIST_PREFIX) -> {
-                        // Futuro: playlist personalizada desde PlaylistRepository
-                        // Por ahora, biblioteca completa como fallback
-                        audioRepository.songs
-                    }
-                    else -> {
-                        // QueueId desconocido: usar biblioteca completa
-                        audioRepository.songs
-                    }
+        librarySubscriptionJob = serviceScope.launch {
+            audioRepository.songs.collectLatest { songs ->
+                // Mapeo en IO: cada toMediaItem hace stats de disco para
+                // verificar si la carátula existe. Con bibliotecas grandes
+                // esto puede ser costoso, por eso se mueve fuera de Main.
+                val mediaItems = withContext(Dispatchers.IO) {
+                    songs.map { it.toMediaItem(coverRepository) }
                 }
-
-                // Suscribirse al Flow y enviar MediaItems al adapter.
-                // El mapeo (que incluye stats de disco) corre en IO
-                // para no bloquear el hilo principal.
-                songsFlow.collectLatest { songs ->
-                    val mediaItems = withContext(Dispatchers.IO) {
-                        songs.map { it.toMediaItem(coverRepository) }
-                    }
-                    bassPlayer.updateLibraryPlaylist(mediaItems)
-                }
+                bassPlayer.updateLibraryPlaylist(mediaItems)
             }
         }
     }

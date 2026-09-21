@@ -148,7 +148,8 @@ fun TrackRow(
     // Coil hace downsampling durante el decode (inSampleSize) en
     // lugar de cargar la imagen completa, reduciendo el pico de
     // memoria al scrollear. El resultado visual es idéntico.
-    val thumbnailPx = with(density) { (52 * density).toInt() }
+    // density.density es el float de densidad de pantalla (ej. 2.0 para xxhdpi).
+    val thumbnailPx = (52 * density.density).toInt()
 
     Row(
         modifier = Modifier
