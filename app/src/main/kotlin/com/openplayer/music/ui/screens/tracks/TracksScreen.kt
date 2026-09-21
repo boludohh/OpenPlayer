@@ -34,6 +34,8 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
+import androidx.media3.common.MediaItem
+import androidx.media3.common.Player
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
 import com.openplayer.music.R
@@ -82,6 +84,15 @@ private val ScrollFadeThreshold = 48.dp
  * La primera vez que se reproduce desde esta pantalla, se carga la cola
  * con queueId "tracksByDate" para que el orden de reproducción respete
  * el orden visual (por fecha descendente).
+ *
+ * **Indicador de pista actual**: cada [TrackRow] recibe un booleano
+ * [TrackRow.isCurrentTrack] que indica si esa canción es la que está
+ * sonando ahora en el reproductor. El indicador se actualiza en tiempo
+ * real mediante un [Player.Listener] registrado en el MediaController,
+ * escuchando cambios de pista (transiciones automáticas, seeks, taps
+ * en otras filas, controles externos). Tocar repetidamente la misma
+ * pista no causa parpadeo porque el indicador depende del estado del
+ * reproductor, no del tap del usuario.
  *
  * **Efecto fade superior condicional**: se dibuja un gradiente vertical
  * en el tope del área de scroll (de color de fondo opaco a transparente
@@ -160,6 +171,15 @@ fun TracksScreen(
 
     // MediaController conectado al PlaybackService
     var controller by remember { mutableStateOf<MediaController?>(null) }
+
+    // mediaId de la pista actualmente en reproducción (null si no hay nada sonando).
+    // Se actualiza reactivamente vía Player.Listener, respondiendo a:
+    // - Taps del usuario en otras filas de la lista
+    // - Transiciones automáticas (fin de pista → siguiente)
+    // - Cambios externos (notificación, Bluetooth, Android Auto)
+    // - Seek a otra pista desde cualquier fuente
+    var currentPlayingMediaId by remember { mutableStateOf<String?>(null) }
+
     DisposableEffect(Unit) {
         val token = SessionToken(
             context,
@@ -174,6 +194,43 @@ fun TracksScreen(
         onDispose {
             controller?.release()
             controller = null
+        }
+    }
+
+    // Listener del MediaController: sigue la pista actual en tiempo real.
+    // Se registra cuando el controller está disponible y se remueve al
+    // descomponer el efecto. Escucha:
+    // - onMediaItemTransition: cambio de pista (automático o manual)
+    // - onPlaybackStateChanged: por si el estado cambia sin transición
+    // Al conectar, también inicializa el estado con la pista actual.
+    DisposableEffect(controller) {
+        val ctrl = controller
+        if (ctrl != null) {
+            // Inicializar con la pista que está sonando al conectar
+            currentPlayingMediaId = ctrl.currentMediaItem?.mediaId
+
+            val listener = object : Player.Listener {
+                override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+                    currentPlayingMediaId = mediaItem?.mediaId
+                    Log.d(DEBUG_TAG, "TracksScreen: media item transition | newMediaId=${mediaItem?.mediaId} | reason=$reason")
+                }
+
+                override fun onPlaybackStateChanged(playbackState: Int) {
+                    // Si el reproductor se detiene completamente (IDLE),
+                    // limpiamos el indicador
+                    if (playbackState == Player.STATE_IDLE) {
+                        currentPlayingMediaId = null
+                    }
+                }
+            }
+
+            ctrl.addListener(listener)
+
+            onDispose {
+                ctrl.removeListener(listener)
+            }
+        } else {
+            onDispose { }
         }
     }
 
@@ -271,9 +328,14 @@ fun TracksScreen(
                     coverRepository.coverFile(song.path)
                 }
 
+                // ¿Esta canción es la que está sonando ahora?
+                // Comparación por mediaId (estable, no depende del orden visual).
+                val isCurrentTrack = song.id.toString() == currentPlayingMediaId
+
                 TrackRow(
                     song = song,
                     coverFile = coverFile,
+                    isCurrentTrack = isCurrentTrack,
                     onClick = {
                         val current = controller ?: return@TrackRow
                         val targetMediaId = song.id.toString()

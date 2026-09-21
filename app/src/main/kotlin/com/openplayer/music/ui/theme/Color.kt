@@ -44,6 +44,9 @@ val LightTopBarIcon = Color(0xFF1A1A1A)
 // Color para el texto de conteo de pistas
 val LightTracksCountText = Color(0xFF525252)
 
+// Color de fondo para la pista actualmente en reproducción
+val LightCurrentTrackBackground = Color(0xFFE8E8E8)
+
 // ----- Tema Oscuro -----
 val DarkPrimary = Color(0xFFF2B8B0)
 val DarkOnPrimary = Color(0xFF601410)
@@ -86,6 +89,9 @@ val DarkTopBarIcon = Color(0xFFF5F5F5)
 // Color para el texto de conteo de pistas
 val DarkTracksCountText = Color(0xFFB3B3B3)
 
+// Color de fondo para la pista actualmente en reproducción
+val DarkCurrentTrackBackground = Color(0xFF202020)
+
 // ----- Tema AMOLED (negro puro) -----
 val AmoledPrimary = Color(0xFFF2B8B0)
 val AmoledOnPrimary = Color(0xFF601410)
@@ -127,3 +133,6 @@ val AmoledTopBarIcon = Color(0xFFE5E5E5)
 
 // Color para el texto de conteo de pistas
 val AmoledTracksCountText = Color(0xFFA3A3A3)
+
+// Color de fondo para la pista actualmente en reproducción
+val AmoledCurrentTrackBackground = Color(0xFF101010)

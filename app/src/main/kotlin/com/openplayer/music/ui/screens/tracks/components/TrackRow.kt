@@ -2,6 +2,7 @@ package com.openplayer.music.ui.screens.tracks.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -17,6 +18,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -30,6 +32,7 @@ import coil3.compose.AsyncImage
 import com.openplayer.music.R
 import com.openplayer.music.data.model.Song
 import com.openplayer.music.ui.theme.LocalCoverPlaceholderIconColor
+import com.openplayer.music.ui.theme.LocalCurrentTrackColor
 import com.openplayer.music.ui.theme.LocalListItemMetaColor
 import com.openplayer.music.ui.theme.LocalListItemSubtitleColor
 import com.openplayer.music.ui.theme.LocalListItemTitleColor
@@ -48,8 +51,8 @@ import java.io.File
  *   el escaneo. Si la canción no tiene portada, se muestra un
  *   placeholder con fondo `surfaceVariant` y el icono
  *   [R.drawable.ic_nav_music_filled] centrado (26dp).
- * - **Textos** (centro): título (16sp Linotte) a 10dp del tope del
- *   contenedor, artista (13sp Linotte) 4dp debajo del título.
+ * - **Textos** (centro): título (16sp) a 10dp del tope del
+ *   contenedor, artista (13sp) 4dp debajo del título.
  *   Ambos con recorte visual con "..." si superan el límite de
  *   15dp antes del texto de duración (solo visual, nunca se
  *   modifica el dato real de la canción).
@@ -61,6 +64,22 @@ import java.io.File
  *   Centrado verticalmente por construcción: 20dp de padding
  *   óptico superior e inferior (20 + 24 + 20 = 64dp). Con callback
  *   [onMoreClick] independiente del tap de reproducción de la fila.
+ *
+ * ## Indicador de pista actual
+ * Cuando [isCurrentTrack] es true, el fondo del Row se colorea con
+ * [LocalCurrentTrackColor] (#E8E8E8 claro, #202020 oscuro, #101010
+ * AMOLED), indicando visualmente cuál es la pista que está sonando.
+ * El color se aplica SOLO al fondo del contenedor, detrás de la
+ * carátula, los textos y los iconos (no se superpone a ellos).
+ * El indicador se actualiza reactivamente según el estado del
+ * reproductor (no según taps del usuario), por lo que tocar
+ * repetidamente la misma pista no causa parpadeo.
+ *
+ * ## Sin ripple de Material
+ * El efecto de onda (ripple) al tocar está deshabilitado en toda
+ * la fila y en el botón more vert, usando `indication = null` con
+ * un InteractionSource propio. El click sigue siendo funcional pero
+ * sin feedback visual de toque.
  *
  * ## Separaciones ópticas
  * - Carátula al borde izquierdo: 24dp (igual que el margen del
@@ -83,6 +102,9 @@ import java.io.File
  * @param song Canción a renderizar (modelo de dominio).
  * @param coverFile Archivo de portada en disco (null si la canción
  *                  no tiene portada extraída).
+ * @param isCurrentTrack true si esta canción es la que está sonando
+ *                       actualmente en el reproductor. Aplica fondo
+ *                       de color al contenedor.
  * @param onClick Callback invocado al tocar cualquier parte de la fila.
  *                La lógica de reproducción vive en la pantalla padre.
  * @param onMoreClick Callback invocado al tocar el icono more vert.
@@ -93,6 +115,7 @@ import java.io.File
 fun TrackRow(
     song: Song,
     coverFile: File?,
+    isCurrentTrack: Boolean,
     onClick: () -> Unit,
     onMoreClick: () -> Unit
 ) {
@@ -101,12 +124,24 @@ fun TrackRow(
     val metaColor = LocalListItemMetaColor.current
     val placeholderBg = MaterialTheme.colorScheme.surfaceVariant
     val placeholderIconColor = LocalCoverPlaceholderIconColor.current
+    val currentTrackBg = LocalCurrentTrackColor.current
+
+    // InteractionSource propio para deshabilitar el ripple de Material
+    val rowInteractionSource = remember { MutableInteractionSource() }
+
+    // Fondo del Row: color de pista actual si corresponde, transparente si no
+    val rowBackground = if (isCurrentTrack) currentTrackBg else MaterialTheme.colorScheme.background
 
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .height(64.dp)
-            .clickable(onClick = onClick)
+            .background(rowBackground)
+            .clickable(
+                interactionSource = rowInteractionSource,
+                indication = null,
+                onClick = onClick
+            )
             .padding(end = 15.dp) // Margen derecho del área de toque del more vert
     ) {
         // Carátula (o placeholder si no hay portada).
@@ -189,6 +224,9 @@ fun TrackRow(
         // toque = 16dp ópticos entre la duración y el glifo more vert.
         Spacer(modifier = Modifier.width(6.dp))
 
+        // InteractionSource propio para el more vert (sin ripple)
+        val moreInteractionSource = remember { MutableInteractionSource() }
+
         // Icono more vert: área de toque de 44×64dp (toda la altura
         // del contenedor), con padding vertical óptico de 20dp arriba
         // y abajo para centrar el glifo de 24dp por construcción
@@ -201,7 +239,11 @@ fun TrackRow(
             modifier = Modifier
                 .width(44.dp)
                 .fillMaxHeight()
-                .clickable(onClick = onMoreClick)
+                .clickable(
+                    interactionSource = moreInteractionSource,
+                    indication = null,
+                    onClick = onMoreClick
+                )
                 .padding(vertical = 20.dp),
             contentAlignment = Alignment.Center
         ) {

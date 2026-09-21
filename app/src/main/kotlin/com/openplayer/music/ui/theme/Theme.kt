@@ -118,6 +118,18 @@ val LocalListItemMetaColor = compositionLocalOf { Color.Gray }
 val LocalCoverPlaceholderIconColor = compositionLocalOf { Color.Gray }
 
 /**
+ * Color de fondo del contenedor de la pista actualmente en reproducción.
+ * Genérico y reutilizable en Tracks/Albums/Artists/Playlists.
+ * Se aplica al Row de la fila como fondo, detrás de carátula/textos/iconos.
+ *
+ * Valores:
+ * - Claro: #E8E8E8
+ * - Oscuro: #202020
+ * - AMOLED: #101010
+ */
+val LocalCurrentTrackColor = compositionLocalOf { Color.Gray }
+
+/**
  * Familia de fuentes activa según el idioma actual.
  * Se provee mediante CompositionLocal en ThemeSwitcherHost para que
  * todos los componentes de tipografía usen la familia correcta:
@@ -302,6 +314,12 @@ fun OpenPlayerTheme(
         ThemeMode.AMOLED -> AmoledNavIconInactive
     }
 
+    val currentTrackColor = when (themeMode) {
+        ThemeMode.LIGHT -> LightCurrentTrackBackground
+        ThemeMode.DARK -> DarkCurrentTrackBackground
+        ThemeMode.AMOLED -> AmoledCurrentTrackBackground
+    }
+
     // Construir tipografía usando la familia provista por LocalAppFontFamily
     val typography = buildTypography(LocalAppFontFamily.current)
 
@@ -315,7 +333,8 @@ fun OpenPlayerTheme(
         LocalListItemTitleColor provides listItemTitleColor,
         LocalListItemSubtitleColor provides listItemSubtitleColor,
         LocalListItemMetaColor provides listItemMetaColor,
-        LocalCoverPlaceholderIconColor provides coverPlaceholderIconColor
+        LocalCoverPlaceholderIconColor provides coverPlaceholderIconColor,
+        LocalCurrentTrackColor provides currentTrackColor
     ) {
         MaterialTheme(
             colorScheme = colorScheme,
