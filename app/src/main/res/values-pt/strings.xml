@@ -2,6 +2,7 @@
     <string name="app_name">OpenPlayer</string>
     <string name="main_placeholder">Ecrã principal</string>
     <string name="main_songs_count">%1$d faixas</string>
+    <string name="main_artists_count">%1$d artistas</string>
     <string name="welcome_title">Bem-vindo ao</string>
     <string name="loading_tagline">Mais do que um reprodutor tradicional</string>
     <string name="start_button">Começar</string>

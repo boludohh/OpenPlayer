@@ -85,7 +85,7 @@ fun MainScreen(audioRepository: AudioRepository) {
                 NavTab.HOME -> HomeScreen()
                 NavTab.TRACKS -> TracksScreen(audioRepository = audioRepository)
                 NavTab.ALBUMS -> AlbumsScreen()
-                NavTab.ARTISTS -> ArtistsScreen()
+                NavTab.ARTISTS -> ArtistsScreen(audioRepository = audioRepository)
                 NavTab.PLAYLISTS -> PlaylistScreen()
             }
         }
