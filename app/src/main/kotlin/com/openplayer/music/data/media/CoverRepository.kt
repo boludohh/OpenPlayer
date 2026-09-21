@@ -75,12 +75,14 @@ class CoverRepository(private val context: Context) {
     }
 
     /**
-     * Caché de `coverFile()`: mapea `path → File?` (el archivo de
-     * disco si existe, o null si no). Evita repetir stats de disco
-     * en cada llamada. Thread-safe porque puede leerse desde varios
-     * hilos (UI recomponiendo filas + servicio mapeando MediaItems).
+     * Caché de `coverFile()`: mapea `path → File` (el archivo de
+     * disco si existe). Solo almacena valores no-null porque
+     * [ConcurrentHashMap] no permite valores null. Evita repetir
+     * stats de disco en cada llamada. Thread-safe porque puede
+     * leerse desde varios hilos (UI recomponiendo filas + servicio
+     * mapeando MediaItems).
      */
-    private val coverFileCache = ConcurrentHashMap<String, File?>()
+    private val coverFileCache = ConcurrentHashMap<String, File>()
 
     /** Directorio persistente en filesDir (no cacheDir). */
     private val diskCacheDir: File = File(context.filesDir, "covers").apply {
@@ -154,7 +156,8 @@ class CoverRepository(private val context: Context) {
      * **Optimización**: usa [coverFileCache] para evitar repetir
      * stats de disco (hasta 4 `File.exists()`) por cada llamada.
      * El caché es thread-safe ([ConcurrentHashMap]) y se invalida
-     * en [deleteCover]/[clearCache].
+     * en [deleteCover]/[clearCache]. Solo almacena valores no-null
+     * porque [ConcurrentHashMap] no permite valores null.
      */
     fun coverFile(path: String): File? {
         // 1. Caché en memoria (O(1), thread-safe)
@@ -164,9 +167,11 @@ class CoverRepository(private val context: Context) {
             return if (cached.exists()) cached else null
         }
 
-        // 2. Stat de disco y almacenar en caché
+        // 2. Stat de disco y almacenar en caché (solo si no es null)
         val file = findExistingCover(md5(path))
-        coverFileCache[path] = file
+        if (file != null) {
+            coverFileCache[path] = file
+        }
         return file
     }
 
