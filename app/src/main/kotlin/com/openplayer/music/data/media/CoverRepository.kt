@@ -12,6 +12,7 @@ import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
 import java.security.MessageDigest
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * Repositorio de portadas de álbumes con caché de dos niveles:
@@ -48,6 +49,13 @@ import java.security.MessageDigest
  * trata como "sin portada" y no se guarda ningún archivo, evitando
  * apuntar la notificación a un recurso que el dispositivo no puede
  * mostrar.
+ *
+ * ## Optimización: caché de `coverFile()`
+ * [coverFile] hace hasta 4 `File.exists()` por llamada (una por cada
+ * formato). Con la UI recomponiendo filas visibles frecuentemente,
+ * esto sumaba muchos stats de disco. Ahora [coverFileCache] retiene
+ * el resultado en memoria (thread-safe con [ConcurrentHashMap]) y
+ * se invalida junto con los otros niveles en [deleteCover]/[clearCache].
  */
 class CoverRepository(private val context: Context) {
 
@@ -65,6 +73,14 @@ class CoverRepository(private val context: Context) {
     ) {
         override fun sizeOf(key: String, bitmap: Bitmap): Int = bitmap.byteCount
     }
+
+    /**
+     * Caché de `coverFile()`: mapea `path → File?` (el archivo de
+     * disco si existe, o null si no). Evita repetir stats de disco
+     * en cada llamada. Thread-safe porque puede leerse desde varios
+     * hilos (UI recomponiendo filas + servicio mapeando MediaItems).
+     */
+    private val coverFileCache = ConcurrentHashMap<String, File?>()
 
     /** Directorio persistente en filesDir (no cacheDir). */
     private val diskCacheDir: File = File(context.filesDir, "covers").apply {
@@ -109,7 +125,7 @@ class CoverRepository(private val context: Context) {
         val diskFile = File(diskCacheDir, "$cacheKey${format.extension}")
         val tempFile = File(diskCacheDir, "$cacheKey.tmp")
 
-        return try {
+        val saved = try {
             // Guardar bytes ORIGINALES (sin compresión)
             FileOutputStream(tempFile).use { it.write(bytes) }
             if (!tempFile.renameTo(diskFile)) {
@@ -122,36 +138,58 @@ class CoverRepository(private val context: Context) {
             tempFile.delete()
             false
         }
+
+        // Actualizar caché de coverFile con el resultado
+        if (saved) {
+            coverFileCache[path] = diskFile
+        }
+
+        return saved
     }
 
     /**
      * Devuelve el [File] de la portada en disco si existe, o `null`
      * si la canción no tiene portada guardada.
      *
-     * Operación sincrónica rápida (stat de hasta 4 archivos). Se usa
-     * desde `SongMediaItems.toMediaItem` para fijar `artworkUri` sin
-     * hacer extracción bajo demanda.
+     * **Optimización**: usa [coverFileCache] para evitar repetir
+     * stats de disco (hasta 4 `File.exists()`) por cada llamada.
+     * El caché es thread-safe ([ConcurrentHashMap]) y se invalida
+     * en [deleteCover]/[clearCache].
      */
-    fun coverFile(path: String): File? = findExistingCover(md5(path))
+    fun coverFile(path: String): File? {
+        // 1. Caché en memoria (O(1), thread-safe)
+        coverFileCache[path]?.let { cached ->
+            // Verificar que el archivo sigue existiendo (pudo borrarse
+            // externamente o por otra instancia)
+            return if (cached.exists()) cached else null
+        }
+
+        // 2. Stat de disco y almacenar en caché
+        val file = findExistingCover(md5(path))
+        coverFileCache[path] = file
+        return file
+    }
 
     /**
      * Borra el archivo de portada asociado a [path] y lo remueve
-     * del caché de memoria. Se llama cuando una canción se elimina
-     * de la biblioteca.
+     * del caché de memoria y del caché de `coverFile()`. Se llama
+     * cuando una canción se elimina de la biblioteca.
      */
     fun deleteCover(path: String) {
         val cacheKey = md5(path)
         memoryCache.remove(cacheKey)
+        coverFileCache.remove(path)
         for (fmt in CoverFormat.entries) {
             File(diskCacheDir, "$cacheKey${fmt.extension}").delete()
         }
     }
 
     /**
-     * Limpia ambos niveles de caché.
+     * Limpia los tres niveles de caché (memoria, disco, coverFile).
      */
     fun clearCache() {
         memoryCache.evictAll()
+        coverFileCache.clear()
         diskCacheDir.listFiles()?.forEach { it.delete() }
     }
 

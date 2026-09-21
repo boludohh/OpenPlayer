@@ -28,10 +28,10 @@ import kotlinx.coroutines.launch
  * La lógica de cada funcionalidad vive en archivos independientes.
  *
  * Ciclo de vida del escaneo:
- * - onStart(): registra ContentObserver para detectar cambios en tiempo real.
+ * - onStart(): registra ContentObserver para detectar cambios en tiempo real
+ *   y lanza un escaneo incremental **con throttling** (30s) para evitar
+ *   re-escaneos frecuentes cuando el usuario cambia rápidamente entre apps.
  * - onStop(): desregistra el ContentObserver.
- * - Al abrir: lanza incrementalScan() para recoger canciones nuevas/modificadas
- *   y eliminar las borradas desde la última apertura.
  *
  * RTL: el idioma actual se pasa a ThemeSwitcherHost, que invierte el
  * layout direction de Compose mediante LocalLayoutDirection cuando
@@ -79,11 +79,16 @@ class MainActivity : ComponentActivity() {
     override fun onStart() {
         super.onStart()
         // Registrar observer para detectar cambios en tiempo real
+        // (sin throttling, el observer aplica su propio debounce de 1.5s)
         audioRepository.registerContentObserver()
-        
-        // Escaneo incremental al abrir la app
+
+        // Escaneo incremental con throttling de 30s al volver a primer plano.
+        // Evita re-escaneos frecuentes cuando el usuario cambia rápidamente
+        // entre apps. Si el usuario agregó música con la app abierta, el
+        // ContentObserver la detecta inmediatamente (usa incrementalScan
+        // sin throttling).
         lifecycleScope.launch {
-            audioRepository.incrementalScan()
+            audioRepository.incrementalScanIfDue()
         }
     }
 

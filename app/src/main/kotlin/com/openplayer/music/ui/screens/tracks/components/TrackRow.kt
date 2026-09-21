@@ -23,12 +23,15 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
+import coil3.request.ImageRequest
+import coil3.size.Size
 import com.openplayer.music.R
 import com.openplayer.music.data.model.Song
 import com.openplayer.music.ui.theme.LocalCoverPlaceholderIconColor
@@ -81,6 +84,14 @@ import java.io.File
  * un InteractionSource propio. El click sigue siendo funcional pero
  * sin feedback visual de toque.
  *
+ * ## Optimización de memoria de carátulas
+ * La carátula se carga vía [ImageRequest] con tamaño fijo de 52dp
+ * (convertido a píxeles según densidad de pantalla). Coil hace
+ * downsampling durante el decode (inSampleSize) en vez de cargar
+ * la imagen completa y escalarla, reduciendo drásticamente el pico
+ * de memoria al scrollear listas largas. El resultado visual es
+ * idéntico (la carátula ya se renderiza a 52×52dp).
+ *
  * ## Separaciones ópticas
  * - Carátula al borde izquierdo: 24dp (igual que el margen del
  *   título de pestaña y conteo).
@@ -125,12 +136,19 @@ fun TrackRow(
     val placeholderBg = MaterialTheme.colorScheme.surfaceVariant
     val placeholderIconColor = LocalCoverPlaceholderIconColor.current
     val currentTrackBg = LocalCurrentTrackColor.current
+    val density = LocalDensity.current
 
     // InteractionSource propio para deshabilitar el ripple de Material
     val rowInteractionSource = remember { MutableInteractionSource() }
 
     // Fondo del Row: color de pista actual si corresponde, transparente si no
     val rowBackground = if (isCurrentTrack) currentTrackBg else MaterialTheme.colorScheme.background
+
+    // Tamaño del thumbnail de la carátula en píxeles para Coil.
+    // Coil hace downsampling durante el decode (inSampleSize) en
+    // lugar de cargar la imagen completa, reduciendo el pico de
+    // memoria al scrollear. El resultado visual es idéntico.
+    val thumbnailPx = with(density) { (52 * density).toInt() }
 
     Row(
         modifier = Modifier
@@ -163,10 +181,16 @@ fun TrackRow(
                 modifier = Modifier.size(26.dp)
             )
 
-            // Carátula encima del placeholder (solo si existe)
+            // Carátula encima del placeholder (solo si existe).
+            // ImageRequest con tamaño fijo para que Coil haga
+            // downsampling durante el decode, reduciendo memoria.
             if (coverFile != null) {
+                val request = ImageRequest.Builder(androidx.compose.ui.platform.LocalContext.current)
+                    .data(coverFile)
+                    .size(Size(thumbnailPx, thumbnailPx))
+                    .build()
                 AsyncImage(
-                    model = coverFile,
+                    model = request,
                     contentDescription = song.title,
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxWidth().fillMaxHeight()

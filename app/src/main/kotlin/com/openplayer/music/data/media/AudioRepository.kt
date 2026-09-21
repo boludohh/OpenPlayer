@@ -51,11 +51,13 @@ import java.io.File
  *    el timestamp actual en DataStore.
  *
  * 2. **Re-escaneo incremental al volver a primer plano**
- *    (`incrementalScan`): lee el timestamp guardado y consulta
+ *    (`incrementalScanIfDue`): lee el timestamp guardado y consulta
  *    MediaStore filtrando por `DATE_ADDED > ts` (nuevos archivos)
  *    **y** `DATE_MODIFIED > ts` (archivos ya indexados cuyas
  *    etiquetas cambiaron). Después de procesar, actualiza el
- *    timestamp al momento actual.
+ *    timestamp al momento actual. Tiene un throttling de
+ *    [INCREMENTAL_SCAN_MIN_INTERVAL_MS] (30s) para evitar re-escaneos
+ *    frecuentes cuando el usuario cambia rápidamente entre apps.
  *
  * 3. **ContentObserver con debounce de 1.5s**: se registra sobre
  *    `MediaStore.Audio.Media.EXTERNAL_CONTENT_URI`. Ante una
@@ -63,6 +65,8 @@ import java.io.File
  *    seguidas) se cancela y reprograma un re-escaneo incremental,
  *    de modo que se ejecuta **una sola vez** al terminar la
  *    ráfaga. Cubre el caso de música agregada con la app abierta.
+ *    **No tiene throttling** porque el ContentObserver ya aplica
+ *    su propio debounce y es crítico detectar cambios en caliente.
  *
  * ## Detección de eliminaciones externas
  *
@@ -119,6 +123,18 @@ class AudioRepository(
     /** Tamaño de cada lote de inserción en Room. */
     private val batchSize = 300
 
+    /**
+     * Intervalo mínimo entre dos llamadas consecutivas de
+     * [incrementalScanIfDue] en milisegundos. Evita que cambios
+     * rápidos entre apps (ej: volver a la app tras 5s) desencadenen
+     * re-escaneos innecesarios. El ContentObserver sigue sin
+     * throttling para no perder cambios en caliente.
+     */
+    private val incrementalScanMinIntervalMs = 30_000L
+
+    /** Timestamp (ms del reloj del sistema) del último incrementalScan ejecutado. */
+    private var lastIncrementalScanTimeMs: Long = 0L
+
     /** Repositorio de portadas: extracción inline y limpieza. */
     private val coverRepository = CoverRepository(context)
 
@@ -150,8 +166,9 @@ class AudioRepository(
     /**
      * Escaneo incremental: nuevos archivos (`DATE_ADDED`) y
      * modificados (`DATE_MODIFIED`) desde el último timestamp.
-     * Se llama al volver a primer plano y es el objetivo del
-     * ContentObserver con debounce.
+     * Se llama desde el ContentObserver con debounce de 1.5s para
+     * cubrir cambios en caliente. **No aplica throttling** porque
+     * el observer ya agrupa ráfagas.
      */
     suspend fun incrementalScan() {
         val lastScan = preferences.lastScanSeconds.first() ?: 0L
@@ -159,7 +176,31 @@ class AudioRepository(
             songDao.insertBatch(batch)
         }
         preferences.setLastScanSeconds(epochSecondsNow())
+        lastIncrementalScanTimeMs = System.currentTimeMillis()
         cleanDeletedFiles()
+    }
+
+    /**
+     * Escaneo incremental con throttling de [incrementalScanMinIntervalMs]
+     * (30s). Si no ha pasado suficiente tiempo desde el último
+     * incrementalScan, retorna inmediatamente sin hacer nada.
+     * Diseñado para [MainActivity.onStart], donde la app vuelve
+     * a primer plano frecuentemente y no queremos escanear en
+     * cada cambio rápido de app.
+     *
+     * Si el usuario agregó música con la app cerrada, el scan
+     * se ejecutará la próxima vez que pase el intervalo. Si agregó
+     * música con la app abierta, el ContentObserver la detecta
+     * inmediatamente (usa [incrementalScan] sin throttling).
+     */
+    suspend fun incrementalScanIfDue() {
+        val now = System.currentTimeMillis()
+        val elapsed = now - lastIncrementalScanTimeMs
+        if (lastIncrementalScanTimeMs > 0 && elapsed < incrementalScanMinIntervalMs) {
+            // Dentro del intervalo: no hacer nada
+            return
+        }
+        incrementalScan()
     }
 
     /**
@@ -350,6 +391,8 @@ class AudioRepository(
             // programa uno nuevo dentro de 1.5s. Así una ráfaga de
             // cambios (ej: descarga de varias canciones) se resuelve
             // con un único escaneo incremental al final.
+            // **Sin throttling**: el observer es crítico para detectar
+            // cambios en caliente mientras la app está abierta.
             debounceJob?.cancel()
             debounceJob = scope.launch {
                 delay(debounceMillis)

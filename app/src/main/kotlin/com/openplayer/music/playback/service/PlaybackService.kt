@@ -28,6 +28,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
  * Servicio de reproducción en segundo plano de OpenPlayer.
@@ -53,6 +54,12 @@ import kotlinx.coroutines.launch
  *   (biblioteca completa, filtrada por álbum, por artista, etc.),
  *   actualizando automáticamente la cola cuando cambian los datos.
  *
+ * ## Optimizaciones de rendimiento
+ * - El mapeo de canciones a MediaItems se ejecuta en `Dispatchers.IO`
+ *   para no bloquear el hilo principal durante syncs de biblioteca.
+ * - Usa el `CoverRepository` singleton de la Application, compartiendo
+ *   el caché de memoria con el resto de la app (evita duplicados).
+ *
  * Nota de API (Media3 1.11.0): [MediaLibrarySession] es una clase
  * anidada dentro de [MediaLibraryService], por eso se importa como
  * `MediaLibraryService.MediaLibrarySession`.
@@ -76,8 +83,13 @@ class PlaybackService : MediaLibraryService() {
     /** Job de la suscripción al Flow de canciones. */
     private var librarySubscriptionJob: Job? = null
 
-    /** Repositorio de portadas para construir MediaItems. */
-    private val coverRepository by lazy { CoverRepository(applicationContext) }
+    /**
+     * Repositorio de portadas para construir MediaItems.
+     * Reutiliza el singleton de la Application para compartir el caché
+     * de memoria con la UI y evitar duplicados.
+     */
+    private val coverRepository: CoverRepository
+        get() = (application as OpenPlayerApplication).coverRepository
 
     // =========================================================================
     // Audio focus para BASS
@@ -222,6 +234,11 @@ class PlaybackService : MediaLibraryService() {
      * anterior cuando cambia el queueId, evitando fugas de memoria.
      * Nota: StateFlow ya garantiza no emitir valores consecutivos iguales,
      * por lo que no se necesita distinctUntilChanged() (sería redundante).
+     *
+     * **Optimización**: el mapeo de canciones a MediaItems (que incluye
+     * stats de disco para verificar carátulas) se ejecuta en
+     * `Dispatchers.IO` para no bloquear el hilo principal. Solo vuelve
+     * a Main para entregar la lista al adapter.
      */
     private fun subscribeToLibraryChanges() {
         val audioRepository = (application as OpenPlayerApplication).audioRepository
@@ -268,9 +285,13 @@ class PlaybackService : MediaLibraryService() {
                     }
                 }
 
-                // Suscribirse al Flow y enviar MediaItems al adapter
-                songsFlow.collect { songs ->
-                    val mediaItems = songs.map { it.toMediaItem(coverRepository) }
+                // Suscribirse al Flow y enviar MediaItems al adapter.
+                // El mapeo (que incluye stats de disco) corre en IO
+                // para no bloquear el hilo principal.
+                songsFlow.collectLatest { songs ->
+                    val mediaItems = withContext(Dispatchers.IO) {
+                        songs.map { it.toMediaItem(coverRepository) }
+                    }
                     bassPlayer.updateLibraryPlaylist(mediaItems)
                 }
             }

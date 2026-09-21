@@ -1,5 +1,6 @@
 package com.openplayer.music.splash.components
 
+import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
@@ -25,6 +26,7 @@ import androidx.compose.ui.unit.dp
 import com.openplayer.music.R
 import com.openplayer.music.ui.theme.LocalFloatingIconColor
 import kotlin.math.sqrt
+import kotlin.math.sin
 import kotlin.random.Random
 
 /**
@@ -51,6 +53,10 @@ private val floatingIconResources = listOf(
  *
  * [xFraction] y [yFraction] son valores normalizados 0..1 que
  * representan la posición relativa dentro del contenedor padre.
+ * [phaseOffsetX] y [phaseOffsetY] son desfasajes de fase para
+ * que cada icono tenga su propio ritmo dentro de la animación
+ * global compartida. [frequencyMultiplierX] y [frequencyMultiplierY]
+ * varían la velocidad para evitar sincronización visual.
  */
 private data class FloatingIconSpec(
     val iconRes: Int,
@@ -60,7 +66,11 @@ private data class FloatingIconSpec(
     val rotationDegrees: Float,
     val alpha: Float,
     val durationMillis: Int,
-    val phaseOffsetMillis: Int
+    val phaseOffsetMillis: Int,
+    val phaseOffsetX: Float,
+    val phaseOffsetY: Float,
+    val frequencyMultiplierX: Float,
+    val frequencyMultiplierY: Float
 )
 
 private const val TARGET_ICON_COUNT = 85
@@ -112,8 +122,7 @@ private const val RANDOM_SEED = 42L
  *   esquinas) mediante muestreo estratificado por celdas.
  * - Cada icono tiene tamaño (30-80dp), rotación, opacidad y fase de
  *   animación aleatorios dentro de rangos definidos.
- * - Animación sutil e infinita de flotación (vaivén de ±5dp)
- *   con duraciones variadas por icono para evitar sincronización.
+ * - Animación sutil e infinita de flotación (vaivén de ±5dp).
  * - Todos los iconos usan el color custom floatingIcon del tema
  *   activo (LocalFloatingIconColor), adaptándose automáticamente
  *   a claro (#D9D9D9) / oscuro (#333333) / AMOLED (#212121).
@@ -123,11 +132,15 @@ private const val RANDOM_SEED = 42L
  *   (medido con onSizeChanged) para una distribución correcta
  *   independientemente del tamaño de pantalla.
  *
- * El algoritmo de colocación usa una rejilla de 8×16 celdas,
- * baraja las celdas y coloca un icono en cada una de las primeras
- * 85, con jitter aleatorio dentro de cada celda para evitar el
- * aspecto de rejilla perfecta. Esto garantiza cobertura uniforme
- * de toda la pantalla incluyendo esquinas y bordes.
+ * **Optimización: un solo `infiniteTransition` compartido**.
+ * Anteriormente cada uno de los ~85 iconos tenía 2 animaciones
+ * infinitas independientes (~170 animaciones corriendo en paralelo).
+ * Ahora un único `rememberInfiniteTransition` a nivel del
+ * composable principal genera una fase global (valor 0..1 que
+ * crece continuamente), y cada icono deriva su desplazamiento
+ * aplicando su propia fase/frecuencia/multiplicador. El resultado
+ * visual es idéntico (movimientos no sincronizados, orgánicos),
+ * pero solo hay 1 animación en el reloj de Compose en vez de 170.
  */
 @Composable
 fun FloatingIconsBackground(modifier: Modifier = Modifier) {
@@ -140,6 +153,24 @@ fun FloatingIconsBackground(modifier: Modifier = Modifier) {
 
     var containerSize by remember { mutableStateOf(IntSize.Zero) }
 
+    // ÚNICA animación infinita para todo el fondo: una fase global
+    // que crece de 0 a 1 con la duración máxima del rango. Cada
+    // icono aplicará su propia fase/frecuencia para derivar su
+    // vaivén independiente, manteniendo el aspecto orgánico.
+    val infiniteTransition = rememberInfiniteTransition(label = "floatingGlobal")
+    val globalPhase by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(
+                durationMillis = MAX_ANIM_DURATION_MS,
+                easing = LinearEasing
+            ),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "globalPhase"
+    )
+
     Box(
         modifier = modifier
             .fillMaxSize()
@@ -147,8 +178,9 @@ fun FloatingIconsBackground(modifier: Modifier = Modifier) {
     ) {
         if (containerSize != IntSize.Zero) {
             specs.forEach { spec ->
-                AnimatedFloatingIcon(
+                StaticFloatingIcon(
                     spec = spec,
+                    globalPhase = globalPhase,
                     floatingIconColor = floatingIconColor,
                     containerWidthPx = containerSize.width,
                     containerHeightPx = containerSize.height,
@@ -160,49 +192,34 @@ fun FloatingIconsBackground(modifier: Modifier = Modifier) {
 }
 
 /**
- * Icono flotante individual con animación infinita de vaivén.
+ * Icono flotante individual con desplazamiento derivado de la fase
+ * global compartida. Cada icono aplica su propia fase y frecuencia
+ * para tener un movimiento independiente (no sincronizado con los
+ * demás), logrando el mismo look orgánico que con animaciones
+ * separadas pero con un solo reloj de animación activo.
  *
- * Se posiciona usando offset() con coordenadas absolutas
- * calculadas a partir del tamaño real del contenedor padre,
- * más una animación de vaivén superpuesta vía graphicsLayer.
+ * Usa `sin()` sobre la fase global para generar vaivén suave,
+ * y [FloatingIconSpec.frequencyMultiplierX] / [FloatingIconSpec.frequencyMultiplierY]
+ * para variar la velocidad por icono.
  */
 @Composable
-private fun AnimatedFloatingIcon(
+private fun StaticFloatingIcon(
     spec: FloatingIconSpec,
+    globalPhase: Float,
     floatingIconColor: androidx.compose.ui.graphics.Color,
     containerWidthPx: Int,
     containerHeightPx: Int,
     density: Float
 ) {
-    val infiniteTransition = rememberInfiniteTransition(
-        label = "float_${spec.phaseOffsetMillis}"
-    )
+    // Derivar desplazamientos X e Y desde la fase global con
+    // senos desfasados y de frecuencia distinta, para que cada
+    // icono tenga su propio movimiento orgánico.
+    // phaseX/Y ∈ [0, 2π) y frequencyMultiplierX/Y ∈ [0.6, 1.4]
+    val phaseX = (globalPhase * spec.frequencyMultiplierX + spec.phaseOffsetX) * 2f * Math.PI.toFloat()
+    val phaseY = (globalPhase * spec.frequencyMultiplierY + spec.phaseOffsetY) * 2f * Math.PI.toFloat()
 
-    val offsetX by infiniteTransition.animateFloat(
-        initialValue = -FLOAT_AMPLITUDE_DP,
-        targetValue = FLOAT_AMPLITUDE_DP,
-        animationSpec = infiniteRepeatable(
-            animation = tween(
-                durationMillis = spec.durationMillis,
-                delayMillis = spec.phaseOffsetMillis
-            ),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "offsetX"
-    )
-
-    val offsetY by infiniteTransition.animateFloat(
-        initialValue = -FLOAT_AMPLITUDE_DP,
-        targetValue = FLOAT_AMPLITUDE_DP,
-        animationSpec = infiniteRepeatable(
-            animation = tween(
-                durationMillis = (spec.durationMillis * 1.3f).toInt(),
-                delayMillis = spec.phaseOffsetMillis + spec.durationMillis / 3
-            ),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "offsetY"
-    )
+    val offsetX = (sin(phaseX) * FLOAT_AMPLITUDE_DP).toFloat()
+    val offsetY = (sin(phaseY) * FLOAT_AMPLITUDE_DP).toFloat()
 
     // Posición base en dp, a partir de las fracciones y el tamaño
     // real del contenedor padre.
@@ -244,6 +261,11 @@ private fun AnimatedFloatingIcon(
  * - Elimina el problema de regiones vacías por azar (huecos).
  * - Mantiene el aspecto orgánico mediante jitter, rotación y
  *   tamaños/opacidades aleatorios.
+ *
+ * Cada icono ahora también recibe [FloatingIconSpec.phaseOffsetX],
+ * [FloatingIconSpec.phaseOffsetY], [FloatingIconSpec.frequencyMultiplierX]
+ * y [FloatingIconSpec.frequencyMultiplierY] para que su movimiento
+ * derivado de la fase global tenga un ritmo independiente.
  */
 private fun generateStratifiedIcons(random: Random): List<FloatingIconSpec> {
     val specs = mutableListOf<FloatingIconSpec>()
@@ -289,6 +311,13 @@ private fun generateStratifiedIcons(random: Random): List<FloatingIconSpec> {
             }
 
             if (!hasCollision) {
+                // Frecuencias en [0.6, 1.4] para variar velocidad por icono
+                val freqX = 0.6f + random.nextFloat() * 0.8f
+                val freqY = 0.6f + random.nextFloat() * 0.8f
+                // Fases en [0, 1) para desfasar cada icono
+                val phaseX = random.nextFloat()
+                val phaseY = random.nextFloat()
+
                 specs.add(
                     FloatingIconSpec(
                         iconRes = floatingIconResources[random.nextInt(floatingIconResources.size)],
@@ -298,7 +327,11 @@ private fun generateStratifiedIcons(random: Random): List<FloatingIconSpec> {
                         rotationDegrees = random.nextFloat() * 360f,
                         alpha = random.nextFloat() * (MAX_ALPHA - MIN_ALPHA) + MIN_ALPHA,
                         durationMillis = random.nextInt(MIN_ANIM_DURATION_MS, MAX_ANIM_DURATION_MS + 1),
-                        phaseOffsetMillis = random.nextInt(0, MAX_ANIM_DURATION_MS)
+                        phaseOffsetMillis = random.nextInt(0, MAX_ANIM_DURATION_MS),
+                        phaseOffsetX = phaseX,
+                        phaseOffsetY = phaseY,
+                        frequencyMultiplierX = freqX,
+                        frequencyMultiplierY = freqY
                     )
                 )
                 placed = true

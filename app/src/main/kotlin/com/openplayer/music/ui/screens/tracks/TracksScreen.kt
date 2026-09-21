@@ -38,9 +38,9 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
+import com.openplayer.music.OpenPlayerApplication
 import com.openplayer.music.R
 import com.openplayer.music.data.media.AudioRepository
-import com.openplayer.music.data.media.CoverRepository
 import com.openplayer.music.data.model.Song
 import com.openplayer.music.playback.engine.BassPlayerAdapter
 import com.openplayer.music.playback.service.PlaybackService
@@ -113,11 +113,15 @@ private val ScrollFadeThreshold = 48.dp
  * (TopActionBar) permanecen fijos en MainScreen.
  *
  * **Carátulas vía Coil**: cada fila ([TrackRow]) muestra la carátula
- * que TagLib extrajo durante el escaneo y que [CoverRepository] guardó
- * en disco. Si una canción no tiene carátula, se muestra un
+ * que TagLib extrajo durante el escaneo y que [com.openplayer.music.data.media.CoverRepository]
+ * guardó en disco. Si una canción no tiene carátula, se muestra un
  * placeholder con icono de nota musical. Las carátulas nunca se cruzan
  * entre canciones gracias al key estable del LazyColumn y al cacheo de
  * Coil por ruta de archivo.
+ *
+ * **Optimización: CoverRepository singleton**. Usa el singleton de
+ * [OpenPlayerApplication] en lugar de crear una instancia propia,
+ * compartiendo el caché de memoria con el servicio y evitando duplicados.
  *
  * **Esta pantalla no realiza extracción de portadas.**
  * La extracción ya se hizo durante el escaneo en [AudioRepository].
@@ -130,7 +134,11 @@ fun TracksScreen(
     val context = LocalContext.current
     val songs by audioRepository.songs.collectAsState(initial = emptyList())
     val coroutineScope = rememberCoroutineScope()
-    val coverRepository = remember { CoverRepository(context) }
+    // Singleton de CoverRepository desde la Application: comparte caché
+    // de memoria con PlaybackService y evita duplicados.
+    val coverRepository = remember {
+        (context.applicationContext as OpenPlayerApplication).coverRepository
+    }
     val screenTitleColor = LocalScreenTitleColor.current
     val tracksCountTextColor = LocalTracksCountTextColor.current
     val backgroundColor = MaterialTheme.colorScheme.background
@@ -324,6 +332,8 @@ fun TracksScreen(
             ) { _, song ->
                 // Archivo de portada en disco (síncrono, sin extracción bajo demanda).
                 // null si la canción no tiene portada extraída por TagLib.
+                // Ahora usa el caché de coverFile() de CoverRepository para evitar
+                // stats de disco repetidos al recomponer filas visibles.
                 val coverFile = remember(song.path) {
                     coverRepository.coverFile(song.path)
                 }
@@ -347,9 +357,9 @@ fun TracksScreen(
                                 // Encontrar el índice de la canción en la lista ordenada por fecha
                                 val startIndex = mediaItems.indexOfFirst { it.mediaId == targetMediaId }
                                     .coerceAtLeast(0)
-                                
+
                                 Log.d(DEBUG_TAG, "TracksScreen: loading queue with queueId=${BassPlayerAdapter.QUEUE_TRACKS_BY_DATE} | startIndex=$startIndex | totalItems=${mediaItems.size}")
-                                
+
                                 // Agregar queueId al tag del primer MediaItem
                                 val taggedMediaItems = mediaItems.mapIndexed { i, item ->
                                     if (i == 0) {
@@ -363,7 +373,7 @@ fun TracksScreen(
                                         item
                                     }
                                 }
-                                
+
                                 // Reemplazar la cola del controller con la cola ordenada por fecha
                                 current.setMediaItems(taggedMediaItems, startIndex, 0L)
                                 current.prepare()
