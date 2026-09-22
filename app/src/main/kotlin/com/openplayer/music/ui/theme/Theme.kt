@@ -130,6 +130,20 @@ val LocalCoverPlaceholderIconColor = compositionLocalOf { Color.Gray }
 val LocalCurrentTrackColor = compositionLocalOf { Color.Gray }
 
 /**
+ * Color del recuadro bordeado que rodea la fila de la pista actualmente
+ * en reproducción (indicador visual de pista actual). Genérico y
+ * reutilizable en Tracks/Albums/Artists/Playlists.
+ * Reutiliza los mismos colores que los iconos de la barra superior,
+ * sin duplicar valores en Color.kt.
+ *
+ * Valores:
+ * - Claro: #1A1A1A
+ * - Oscuro: #F5F5F5
+ * - AMOLED: #E5E5E5
+ */
+val LocalCurrentTrackBorderColor = compositionLocalOf { Color.Black }
+
+/**
  * Familia de fuentes activa según el idioma actual.
  * Se provee mediante CompositionLocal en ThemeSwitcherHost para que
  * todos los componentes de tipografía usen la familia correcta:
@@ -240,7 +254,7 @@ private val AmoledColors = darkColorScheme(
  * [LocalAppFontFamily], que es provista por ThemeSwitcherHost según
  * el idioma activo (IBM Plex Sans o IBM Plex Sans Arabic).
  *
- * También provee los CompositionLocales de colores personalizados
+ * También provee los CompositionLocals de colores personalizados
  * para que los componentes accedan a colores semánticos según el tema.
  */
 @Composable
@@ -320,6 +334,12 @@ fun OpenPlayerTheme(
         ThemeMode.AMOLED -> AmoledCurrentTrackBackground
     }
 
+    val currentTrackBorderColor = when (themeMode) {
+        ThemeMode.LIGHT -> LightTopBarIcon
+        ThemeMode.DARK -> DarkTopBarIcon
+        ThemeMode.AMOLED -> AmoledTopBarIcon
+    }
+
     // Construir tipografía usando la familia provista por LocalAppFontFamily
     val typography = buildTypography(LocalAppFontFamily.current)
 
@@ -334,7 +354,8 @@ fun OpenPlayerTheme(
         LocalListItemSubtitleColor provides listItemSubtitleColor,
         LocalListItemMetaColor provides listItemMetaColor,
         LocalCoverPlaceholderIconColor provides coverPlaceholderIconColor,
-        LocalCurrentTrackColor provides currentTrackColor
+        LocalCurrentTrackColor provides currentTrackColor,
+        LocalCurrentTrackBorderColor provides currentTrackBorderColor
     ) {
         MaterialTheme(
             colorScheme = colorScheme,

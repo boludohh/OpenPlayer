@@ -22,6 +22,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
@@ -35,11 +39,41 @@ import coil3.size.Size
 import com.openplayer.music.R
 import com.openplayer.music.data.model.Song
 import com.openplayer.music.ui.theme.LocalCoverPlaceholderIconColor
-import com.openplayer.music.ui.theme.LocalCurrentTrackColor
+import com.openplayer.music.ui.theme.LocalCurrentTrackBorderColor
 import com.openplayer.music.ui.theme.LocalListItemMetaColor
 import com.openplayer.music.ui.theme.LocalListItemSubtitleColor
 import com.openplayer.music.ui.theme.LocalListItemTitleColor
 import java.io.File
+
+/**
+ * Borde izquierdo de la carátula respecto al borde de la fila.
+ * Replica el padding start de 24dp aplicado al Box de la carátula;
+ * se declara como constante para poder calcular la geometría del
+ * recuadro indicador sin alterar el layout existente.
+ */
+private val CoverLeftEdge = 24.dp
+
+/**
+ * Borde derecho del glifo more vert respecto al borde derecho de la
+ * fila: 15dp de padding end del Row + 10dp de centrado del glifo de
+ * 24dp dentro de su área de toque de 44dp (15 + 10 = 25dp).
+ */
+private val MoreGlyphRightEdgeFromEnd = 25.dp
+
+/** Grosor del trazo del recuadro indicador de pista actual. */
+private val CurrentTrackBorderStroke = 2.dp
+
+/**
+ * Separación óptica entre el borde interno del trazo del recuadro y
+ * la carátula (lado izquierdo) o el glifo more vert (lado derecho).
+ */
+private val CurrentTrackBorderGap = 4.dp
+
+/**
+ * Radio exterior de las esquinas del recuadro indicador.
+ * Valor óptico proporcional al contenedor de 64dp.
+ */
+private val CurrentTrackBorderCorner = 12.dp
 
 /**
  * Contenedor de pista individual para listas de reproducción.
@@ -69,11 +103,17 @@ import java.io.File
  *   [onMoreClick] independiente del tap de reproducción de la fila.
  *
  * ## Indicador de pista actual
- * Cuando [isCurrentTrack] es true, el fondo del Row se colorea con
- * [LocalCurrentTrackColor] (#E8E8E8 claro, #202020 oscuro, #101010
- * AMOLED), indicando visualmente cuál es la pista que está sonando.
- * El color se aplica SOLO al fondo del contenedor, detrás de la
- * carátula, los textos y los iconos (no se superpone a ellos).
+ * Cuando [isCurrentTrack] es true, se dibuja un recuadro bordeado
+ * como overlay puramente visual (trazo de 2dp, esquinas de 12dp):
+ * - Línea vertical izquierda a 4dp ópticos de la carátula.
+ * - Línea vertical derecha a 4dp ópticos del glifo more vert.
+ * - Líneas superior e inferior en el límite del contenedor (64dp),
+ *   sin sobrepasarlo ni invadir las filas contiguas.
+ * El color proviene de [LocalCurrentTrackBorderColor] (#1A1A1A
+ * claro, #F5F5F5 oscuro, #E5E5E5 AMOLED). El contenedor real NO se
+ * modifica: sigue siendo 64dp de alto y ancho completo, y su fondo
+ * permanece con el color de fondo del tema (el antiguo fondo de
+ * color del indicador se eliminó por ser un indicador genérico).
  * El indicador se actualiza reactivamente según el estado del
  * reproductor (no según taps del usuario), por lo que tocar
  * repetidamente la misma pista no causa parpadeo.
@@ -114,8 +154,8 @@ import java.io.File
  * @param coverFile Archivo de portada en disco (null si la canción
  *                  no tiene portada extraída).
  * @param isCurrentTrack true si esta canción es la que está sonando
- *                       actualmente en el reproductor. Aplica fondo
- *                       de color al contenedor.
+ *                       actualmente en el reproductor. Dibuja el
+ *                       recuadro bordeado indicador sobre la fila.
  * @param onClick Callback invocado al tocar cualquier parte de la fila.
  *                La lógica de reproducción vive en la pantalla padre.
  * @param onMoreClick Callback invocado al tocar el icono more vert.
@@ -135,14 +175,16 @@ fun TrackRow(
     val metaColor = LocalListItemMetaColor.current
     val placeholderBg = MaterialTheme.colorScheme.surfaceVariant
     val placeholderIconColor = LocalCoverPlaceholderIconColor.current
-    val currentTrackBg = LocalCurrentTrackColor.current
+    val currentTrackBorderColor = LocalCurrentTrackBorderColor.current
     val density = LocalDensity.current
 
     // InteractionSource propio para deshabilitar el ripple de Material
     val rowInteractionSource = remember { MutableInteractionSource() }
 
-    // Fondo del Row: color de pista actual si corresponde, transparente si no
-    val rowBackground = if (isCurrentTrack) currentTrackBg else MaterialTheme.colorScheme.background
+    // Fondo del Row: siempre el color de fondo del tema. El indicador
+    // de pista actual ahora es el recuadro bordeado que se dibuja en
+    // el drawWithContent más abajo (overlay puramente visual).
+    val rowBackground = MaterialTheme.colorScheme.background
 
     // Tamaño del thumbnail de la carátula en píxeles para Coil.
     // Coil hace downsampling durante el decode (inSampleSize) en
@@ -156,6 +198,55 @@ fun TrackRow(
             .fillMaxWidth()
             .height(64.dp)
             .background(rowBackground)
+            // Recuadro indicador de pista actual (overlay visual).
+            // Se dibuja DESPUÉS del contenido para garantizar su
+            // visibilidad; no interseca carátula, textos ni iconos
+            // porque vive en los márgenes ópticos de la fila.
+            .drawWithContent {
+                drawContent()
+                if (isCurrentTrack) {
+                    val strokePx = CurrentTrackBorderStroke.toPx()
+                    val halfPx = strokePx / 2f
+
+                    // Centro del trazo vertical izquierdo: borde de la
+                    // carátula (24dp) - separación óptica (4dp) - medio
+                    // trazo (1dp) = 19dp. El borde interno del trazo
+                    // queda exactamente a 4dp de la carátula.
+                    val leftCenterPx =
+                        (CoverLeftEdge - CurrentTrackBorderGap).toPx() - halfPx
+
+                    // Centro del trazo vertical derecho: borde del glifo
+                    // more vert (25dp desde el final) - separación óptica
+                    // (4dp) - medio trazo (1dp) = 20dp desde el borde
+                    // derecho de la fila. El borde interno del trazo
+                    // queda exactamente a 4dp del glifo.
+                    val rightCenterPx =
+                        size.width - ((MoreGlyphRightEdgeFromEnd - CurrentTrackBorderGap).toPx() - halfPx)
+
+                    // Trazo superior e inferior centrados a medio trazo
+                    // del límite del contenedor: ocupan [0, 2dp] y
+                    // [62dp, 64dp] sin invadir las filas contiguas.
+                    drawRoundRect(
+                        color = currentTrackBorderColor,
+                        topLeft = Offset(leftCenterPx, halfPx),
+                        // Nombre completo para evitar la colisión con
+                        // coil3.size.Size (usado por el ImageRequest de
+                        // la carátula). Sin este calificativo, Kotlin
+                        // no sabría cuál de las dos clases "Size" usar.
+                        size = androidx.compose.ui.geometry.Size(
+                            width = rightCenterPx - leftCenterPx,
+                            height = size.height - strokePx
+                        ),
+                        // Radio de línea centro = radio exterior (12dp)
+                        // - medio trazo, para que el borde exterior del
+                        // trazo tenga exactamente 12dp ópticos.
+                        cornerRadius = CornerRadius(
+                            CurrentTrackBorderCorner.toPx() - halfPx
+                        ),
+                        style = Stroke(strokePx)
+                    )
+                }
+            }
             .clickable(
                 interactionSource = rowInteractionSource,
                 indication = null,
