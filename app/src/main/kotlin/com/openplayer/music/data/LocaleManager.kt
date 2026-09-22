@@ -58,11 +58,15 @@ object LocaleManager {
     fun resolveLanguage(saved: String?): String =
         if (saved != null && SUPPORTED_LANGUAGES.contains(saved)) saved else DEFAULT_LANGUAGE
 
-    /** Convierte un código de idioma en [Locale]. */
+    /**
+     * Convierte un código de idioma en [Locale] utilizando la API moderna
+     * [Locale.Builder] (disponible desde API 21). Los constructores
+     * directos de Locale están deprecados desde Java 19 y Android 16.
+     */
     fun localeFor(code: String): Locale =
         when (code) {
-            LANGUAGE_PT_BR -> Locale("pt", "BR")
-            else -> Locale(code)
+            LANGUAGE_PT_BR -> Locale.Builder().setLanguage("pt").setRegion("BR").build()
+            else -> Locale.Builder().setLanguage(code).build()
         }
 
     /**

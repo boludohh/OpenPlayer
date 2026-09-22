@@ -68,7 +68,7 @@ private val languageEntries: List<Pair<String, Int>> = listOf(
 
 /** Especificación de una tarjeta de permiso dentro del panel. */
 private class PermissionCardSpec(
-    @DrawableRes val icon: Int,
+    @param:DrawableRes val icon: Int,
     val title: String,
     val body: String,
     val permissionState: PermissionState,
@@ -132,7 +132,7 @@ private const val finishButtonAnimDuration = 300
  *   alternar entre claro/oscuro/AMOLED.
  *
  * Los títulos de sección y el icono del escudo usan inverseOnSurface
- * (#1A1A1A claro, #F5F5F5 oscuro, #E5E5E5 AMOLED). Los subtítulos y
+ * (#5A1A1A claro, #F5F5F5 oscuro, #E5E5E5 AMOLED). Los subtítulos y
  * cuerpos de las tarjetas usan onSurfaceVariant (#525252 / #B3B3B3 /
  * #A3A3A3). La cápsula "Finalizar" se adapta automáticamente al tema
  * mediante los slots semánticos del colorScheme (surfaceVariant, scrim,

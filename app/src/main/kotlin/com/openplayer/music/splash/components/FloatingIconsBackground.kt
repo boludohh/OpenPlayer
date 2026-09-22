@@ -218,8 +218,8 @@ private fun StaticFloatingIcon(
     val phaseX = (globalPhase * spec.frequencyMultiplierX + spec.phaseOffsetX) * 2f * Math.PI.toFloat()
     val phaseY = (globalPhase * spec.frequencyMultiplierY + spec.phaseOffsetY) * 2f * Math.PI.toFloat()
 
-    val offsetX = (sin(phaseX) * FLOAT_AMPLITUDE_DP).toFloat()
-    val offsetY = (sin(phaseY) * FLOAT_AMPLITUDE_DP).toFloat()
+    val offsetX = sin(phaseX) * FLOAT_AMPLITUDE_DP
+    val offsetY = sin(phaseY) * FLOAT_AMPLITUDE_DP
 
     // Posición base en dp, a partir de las fracciones y el tamaño
     // real del contenedor padre.
