@@ -28,10 +28,6 @@ android {
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
-        ndk {
-            abiFilters += listOf("arm64-v8a", "armeabi-v7a")
-        }
-
         externalNativeBuild {
             cmake {
                 cppFlags += listOf("-std=c++17", "-frtti", "-fexceptions")
@@ -106,7 +102,7 @@ android {
         getByName("main") {
             // Directorio de librerías nativas precompiladas:
             // - bass/: libbass.so, libbassmix.so, libbassflac.so, libbassopus.so, libbass_aac.so
-            jniLibs.srcDirs("src/main/cpp/bass")
+            jniLibs.directories += "src/main/cpp/bass"
         }
     }
 }
