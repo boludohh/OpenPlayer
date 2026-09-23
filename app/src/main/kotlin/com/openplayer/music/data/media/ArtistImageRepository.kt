@@ -6,6 +6,7 @@ import com.openplayer.music.data.db.AppDatabase
 import com.openplayer.music.data.db.ArtistEntity
 import com.openplayer.music.data.remote.FanartClient
 import com.openplayer.music.data.remote.MusicBrainzClient
+import com.openplayer.music.data.remote.MusicBrainzClient.MusicBrainzResult
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
