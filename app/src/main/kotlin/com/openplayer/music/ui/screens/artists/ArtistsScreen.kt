@@ -15,6 +15,7 @@ import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -25,10 +26,12 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.openplayer.music.OpenPlayerApplication
 import com.openplayer.music.R
 import com.openplayer.music.data.media.AudioRepository
 import com.openplayer.music.ui.screens.artists.components.ArtistCircle
@@ -56,16 +59,24 @@ private val ScrollFadeThreshold = 48.dp
 /**
  * Pantalla de artistas de OpenPlayer.
  *
- * Muestra un grid de 2 columnas con círculos placeholder de 160dp
- * (preparados para futuras carátulas de artista vía MusicBrainz/Fanart.tv)
- * con el nombre del artista debajo. El header (título + conteo) forma
- * parte del scroll junto con los círculos.
+ * Muestra un grid de 2 columnas con círculos de 160dp (con la carátula
+ * real del artista cuando el pipeline de enriquecido la resolvió, o
+ * placeholder mientras tanto) y el nombre del artista debajo. El
+ * header (título + conteo) forma parte del scroll junto con los círculos.
+ *
+ * **Enriquecido remoto (MusicBrainz → Fanart.tv → Room → disco → Coil)**:
+ * al entrar a la pestaña, un [LaunchedEffect] dispara
+ * [com.openplayer.music.data.media.ArtistImageRepository.enrichArtists]
+ * con los nombres distintos de artista. El repositorio es cache-first
+ * (no repite peticiones ya resueltas) y secuencial con ~1.1s entre
+ * llamadas (rate limit de MusicBrainz). Las imágenes resueltas llegan
+ * a las celdas reactivamente vía [com.openplayer.music.data.media.ArtistImageRepository.artistImages].
  *
  * **Componente separado**: cada celda del grid se renderiza con
  * [ArtistCircle] (archivo independiente en `artists/components/`),
- * que concentra la geometría del círculo placeholder y será el punto
- * único de cambio cuando lleguen las carátulas reales. Esta pantalla
- * se reserva para la orquestación: datos, header, fade y grid.
+ * que concentra la geometría del círculo y recibe el [java.io.File]
+ * de imagen cuando existe. Esta pantalla se reserva para la
+ * orquestación: datos, enriquecido, header, fade y grid.
  *
  * **Efecto fade superior condicional**: se dibuja un gradiente vertical
  * en el tope del área de scroll (de color de fondo opaco a transparente
@@ -89,12 +100,23 @@ fun ArtistsScreen(
     audioRepository: AudioRepository,
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
     val songs by audioRepository.songs.collectAsState(initial = emptyList())
     val screenTitleColor = LocalScreenTitleColor.current
     val tracksCountTextColor = LocalTracksCountTextColor.current
     val backgroundColor = MaterialTheme.colorScheme.background
     val gridState = rememberLazyGridState()
     val density = LocalDensity.current
+
+    // Singleton del repositorio de imágenes de artista desde la
+    // Application: comparte cachés de disco/memoria y la cola de
+    // enriquecido con cualquier otro consumidor futuro.
+    val artistImageRepository = remember {
+        (context.applicationContext as OpenPlayerApplication).artistImageRepository
+    }
+
+    // Mapa reactivo nombre → File de imagen en disco (solo resueltas).
+    val artistImages by artistImageRepository.artistImages.collectAsState(initial = emptyMap())
 
     // Convertir el umbral de dp a píxeles usando la densidad de la pantalla
     val thresholdPx = with(density) { ScrollFadeThreshold.toPx() }
@@ -128,6 +150,13 @@ fun ArtistsScreen(
         songs.map { it.artist }
             .distinct()
             .sorted()
+    }
+
+    // Enriquecido remoto cache-first al entrar a la pestaña (o al
+    // cambiar la biblioteca). El Mutex interno del repositorio descarta
+    // corridas solapadas; los artistas ya resueltos no generan peticiones.
+    LaunchedEffect(artists) {
+        artistImageRepository.enrichArtists(artists)
     }
 
     Column(
@@ -211,7 +240,10 @@ fun ArtistsScreen(
                 items = artists,
                 key = { artistName -> artistName }
             ) { artistName ->
-                ArtistCircle(artistName = artistName)
+                ArtistCircle(
+                    artistName = artistName,
+                    imageFile = artistImages[artistName]
+                )
             }
         }
     }

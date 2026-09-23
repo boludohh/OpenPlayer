@@ -36,4 +36,5 @@
     <string name="artists_screen_placeholder">Artistes</string>
     <string name="playlist_screen_placeholder">Listes de lecture</string>
     <string name="search_placeholder">Rechercher</string>
+    <string name="fanart_attribution">Images d\'artistes par fanart.tv</string>
 </resources>

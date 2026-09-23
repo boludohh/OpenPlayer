@@ -14,6 +14,16 @@ if (keystorePropertiesFile.exists()) {
     keystoreProperties.load(FileInputStream(keystorePropertiesFile))
 }
 
+// Cargar propiedades LOCALES (claves de API) que NUNCA se commitean.
+// local.properties está ignorado en .gitignore; en CI o en máquinas
+// sin el archivo, los BuildConfigField quedan vacíos y las
+// funcionalidades remotas degradan elegantemente.
+val localPropertiesFile = rootProject.file("local.properties")
+val localProperties = Properties()
+if (localPropertiesFile.exists()) {
+    localProperties.load(FileInputStream(localPropertiesFile))
+}
+
 android {
     namespace = "com.openplayer.music"
     compileSdk = 37
@@ -23,10 +33,19 @@ android {
         applicationId = "com.openplayer.music"
         minSdk = 27
         targetSdk = 37
-        versionCode = 63
-        versionName = "0.24.0"
+        versionCode = 64
+        versionName = "0.25.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        // Clave de proyecto de Fanart.tv inyectada desde local.properties
+        // (FANART_API_KEY=...). Vacía en CI: el enriquecido remoto de
+        // imágenes de artista degrada a placeholders sin romper nada.
+        buildConfigField(
+            "String",
+            "FANART_API_KEY",
+            "\"${localProperties.getProperty("FANART_API_KEY", "")}\""
+        )
 
         externalNativeBuild {
             cmake {
@@ -78,6 +97,8 @@ android {
 
     buildFeatures {
         compose = true
+        // BuildConfig generado para exponer FANART_API_KEY y VERSION_NAME
+        buildConfig = true
     }
 
     // packaging eliminado: useLegacyPackaging ya no es necesario.

@@ -10,7 +10,7 @@
     <string name="back_button">Voltar</string>
     <string name="permissions_title">Conceder permissões</string>
     <string name="permissions_subtitle">Para utilizar totalmente as funcionalidades do OpenPlayer, precisamos da sua permissão para aceder a determinadas capacidades do dispositivo.</string>
-    <string name="android13_notice_title">Aviso para Android 13+</string>
+    <string name="android13_notice_title">Aviso Android 13+</string>
     <string name="android13_notice_body">Nas versões mais recentes do Android, verá vários pedidos de permissão. Conceda acesso aos ficheiros de áudio e às notificações para desfrutar da melhor experiência.</string>
     <string name="permission_library_title">Acesso à biblioteca musical</string>
     <string name="permission_library_body">Lê os seus ficheiros de música locais e mostra-os na aplicação.</string>
@@ -36,4 +36,5 @@
     <string name="artists_screen_placeholder">Artistas</string>
     <string name="playlist_screen_placeholder">Listas de reprodução</string>
     <string name="search_placeholder">Pesquisar</string>
+    <string name="fanart_attribution">Imagens de artistas por fanart.tv</string>
 </resources>

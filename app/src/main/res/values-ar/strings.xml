@@ -36,4 +36,5 @@
     <string name="artists_screen_placeholder">الفنانون</string>
     <string name="playlist_screen_placeholder">قوائم التشغيل</string>
     <string name="search_placeholder">بحث</string>
+    <string name="fanart_attribution">صور الفنانين بواسطة fanart.tv</string>
 </resources>
