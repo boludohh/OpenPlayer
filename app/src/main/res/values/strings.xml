@@ -3,6 +3,7 @@
     <string name="main_placeholder">Pantalla principal</string>
     <string name="main_songs_count">%1$d pistas</string>
     <string name="main_artists_count">%1$d artistas</string>
+    <string name="main_albums_count">%1$d álbumes</string>
     <string name="main_playlists_count">%1$d listas</string>
     <string name="welcome_title">Bienvenido a</string>
     <string name="loading_tagline">Más que un reproductor tradicional</string>
@@ -43,5 +44,7 @@
     <string name="search_section_songs">Canciones</string>
     <string name="search_section_playlists">Listas de reproducción</string>
     <string name="search_empty_query">Escribe para buscar en tu biblioteca</string>
+    <string name="album_year_tracks">%1$d · %2$d pistas</string>
+    <string name="album_tracks_count">%1$d pistas</string>
     <string name="artist_images_attribution">Imágenes de artistas por Deezer. Contenido para uso privado y familiar.</string>
 </resources>

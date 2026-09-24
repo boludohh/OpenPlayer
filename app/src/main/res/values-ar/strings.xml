@@ -3,6 +3,7 @@
     <string name="main_placeholder">الشاشة الرئيسية</string>
     <string name="main_songs_count">%1$d مقطوعات</string>
     <string name="main_artists_count">%1$d فنانون</string>
+    <string name="main_albums_count">%1$d ألبومات</string>
     <string name="main_playlists_count">%1$d قوائم</string>
     <string name="welcome_title">مرحبًا بك في</string>
     <string name="loading_tagline">أكثر من مشغل تقليدي</string>
@@ -43,5 +44,7 @@
     <string name="search_section_songs">المقطوعات</string>
     <string name="search_section_playlists">قوائم التشغيل</string>
     <string name="search_empty_query">اكتب للبحث في مكتبتك</string>
+    <string name="album_year_tracks">%1$d · %2$d مقطوعات</string>
+    <string name="album_tracks_count">%1$d مقطوعات</string>
     <string name="artist_images_attribution">صور الفنانين بواسطة Deezer. المحتوى للاستخدام الخاص والعائلي.</string>
 </resources>
