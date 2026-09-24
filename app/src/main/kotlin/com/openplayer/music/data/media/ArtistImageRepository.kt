@@ -14,6 +14,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.FileOutputStream
@@ -197,7 +198,7 @@ class ArtistImageRepository(
      */
     private suspend fun downloadAndSave(name: String, url: String): Boolean =
         withContext(Dispatchers.IO) {
-            downloadSemaphore.withLock {
+            downloadSemaphore.withPermit {
                 if (findOnDisk(name) != null) return@withContext true
                 var connection: HttpURLConnection? = null
                 try {
