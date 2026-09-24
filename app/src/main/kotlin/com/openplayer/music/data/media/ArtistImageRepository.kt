@@ -1,19 +1,18 @@
 package com.openplayer.music.data.media
 
 import android.content.Context
-import com.openplayer.music.data.AppPreferences
 import com.openplayer.music.data.db.AppDatabase
 import com.openplayer.music.data.db.ArtistEntity
-import com.openplayer.music.data.remote.FanartClient
-import com.openplayer.music.data.remote.MusicBrainzClient
-import com.openplayer.music.data.remote.MusicBrainzClient.MusicBrainzResult
+import com.openplayer.music.data.remote.DeezerClient
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -25,39 +24,37 @@ import java.util.concurrent.ConcurrentHashMap
 
 /**
  * Repositorio de imágenes de artista: orquesta el pipeline completo
- * **MusicBrainz (MBID) → Fanart.tv (artistthumb) → descarga a disco →
- * Room (caché) → Coil (UI)**, cumpliendo los términos de ambos
- * servicios y la política de rate limiting.
+ * **Deezer (búsqueda de artista + picture_big) → descarga a disco →
+ * Room (caché) → Coil (UI)**, cumpliendo los términos de uso de Deezer
+ * (uso no comercial; contenido informado en la app como de uso
+ * privado y familiar).
  *
- * ## Política de caché y peticiones mínimas (término general 5 de
- * fanart.tv y buenas prácticas de MusicBrainz)
- * - **Cache-first**: un artista con [ArtistEntity.mbid] no-null
- *   (positivo o negativo) NUNCA se vuelve a consultar en MusicBrainz.
- * - Resultado negativo de MusicBrainz (`mbid = ""`) se cachea para no
+ * ## Política de caché y peticiones mínimas
+ * - **Cache-first**: un artista con fila en Room (positiva o negativa)
+ *   NUNCA se vuelve a consultar en Deezer.
+ * - Resultado negativo (`deezerId = [NOT_FOUND_ID]`) se cachea para no
  *   reintentar nombres inexistentes en cada visita.
- * - Error de red en MusicBrainz NO se cachea: se reintenta en la
- *   próxima visita a la pestaña.
- * - Si el MBID existe y hay `thumbUrl` pero falta el archivo en disco
- *   (borrado externo), se re-descarga DIRECTO desde la URL sin tocar
- *   ninguna API.
- * - **Cola secuencial con ~1.1s entre llamadas remotas** (límite de
- *   MusicBrainz de 1 req/s). Nunca peticiones en paralelo: un [Mutex]
- *   garantiza una única corrida de enriquecido a la vez.
+ * - Error de red en Deezer NO se cachea: se reintenta en la próxima
+ *   visita a la pestaña.
+ * - Si hay `imageUrl` pero falta el archivo en disco (borrado externo),
+ *   se re-descarga DIRECTO desde la URL sin tocar la API.
+ * - **Búsquedas secuenciales con ~300ms entre llamadas** (Deezer no
+ *   impone el 1 req/s de MusicBrainz; el espaciado es conservador para
+ *   respetar el monitoreo de uso de sus términos).
+ * - **Descargas de imagen paralelizadas** con [DOWNLOAD_WORKERS]
+ *   workers mediante [Semaphore]: la búsqueda sigue siendo secuencial,
+ *   solo la transferencia de bytes se solapa.
+ * - Un [Mutex] garantiza una única corrida de enriquecido a la vez.
  *
  * ## Caché de disco
  * Directorio `filesDir/artist_images/`, nombre MD5(name) + extensión
  * detectada por magic bytes (jpg/png/webp, fallback `.img`), mismo
  * criterio que [CoverRepository]. Un [ConcurrentHashMap] evita stats
  * de disco repetidos entre recomposiciones.
- *
- * ## Clave personal del usuario
- * Lee [AppPreferences.fanartUserKey] (preparado técnicamente, sin UI
- * todavía) y la envía como `client_key` junto a la clave de proyecto.
  */
 class ArtistImageRepository(
     context: Context,
-    appDatabase: AppDatabase,
-    private val appPreferences: AppPreferences
+    appDatabase: AppDatabase
 ) {
 
     private val artistDao = appDatabase.artistDao()
@@ -72,6 +69,9 @@ class ArtistImageRepository(
 
     /** Una única corrida de enriquecido a la vez. */
     private val enrichMutex = Mutex()
+
+    /** Límite de descargas de imagen simultáneas. */
+    private val downloadSemaphore = Semaphore(DOWNLOAD_WORKERS)
 
     /**
      * Mapa reactivo `nombre → File de imagen` para la UI. Solo incluye
@@ -113,71 +113,74 @@ class ArtistImageRepository(
         if (names.isEmpty()) return
         enrichMutex.withLock {
             val cached = artistDao.getAllOnce().associateBy { it.name }
-            val userKey = appPreferences.fanartUserKey.first()
             val now = System.currentTimeMillis() / 1000
+            val pendingDownloads = mutableListOf<Pair<String, String>>()
 
             for (name in names) {
                 val entity = cached[name]
 
-                // Ya resuelto en MusicBrainz (positivo o negativo): no
-                // se vuelve a consultar. Solo se re-descarga la imagen
-                // si hay URL y falta el archivo en disco.
-                if (entity != null && entity.mbid != null) {
-                    val url = entity.thumbUrl
+                // Ya resuelto en Deezer (positivo o negativo): no se
+                // vuelve a consultar. Solo se re-descarga la imagen si
+                // hay URL y falta el archivo en disco.
+                if (entity != null) {
+                    val url = entity.imageUrl
                     if (url != null && artistImageFile(name) == null) {
-                        downloadAndSave(name, url)
+                        pendingDownloads += name to url
                     }
                     continue
                 }
 
-                // 1) MusicBrainz: resolver MBID (1 request)
-                when (val result = MusicBrainzClient.searchArtist(name)) {
-                    MusicBrainzResult.Error -> {
+                // Búsqueda en Deezer (1 request) con algoritmo de 4 pasos
+                when (val result = DeezerClient.searchArtist(name)) {
+                    DeezerClient.DeezerResult.Error -> {
                         // Red caída o HTTP != 200: sin caché, reintento
                         // en la próxima visita.
-                        delay(REMOTE_CALL_SPACING_MS)
+                        delay(SEARCH_SPACING_MS)
                         continue
                     }
-                    MusicBrainzResult.NoResults -> {
-                        // Sin candidatos: negativo cacheable (mbid = "")
+                    DeezerClient.DeezerResult.NoResults -> {
+                        // Sin candidatos confiables: negativo cacheable
                         artistDao.upsertAll(
                             listOf(
                                 ArtistEntity(
                                     name = name,
-                                    mbid = "",
-                                    disambiguation = null,
-                                    thumbUrl = null,
+                                    deezerId = NOT_FOUND_ID,
+                                    imageUrl = null,
                                     updatedAt = now
                                 )
                             )
                         )
-                        delay(REMOTE_CALL_SPACING_MS)
+                        delay(SEARCH_SPACING_MS)
                         continue
                     }
-                    is MusicBrainzResult.Found -> {
-                        delay(REMOTE_CALL_SPACING_MS)
+                    is DeezerClient.DeezerResult.Found -> {
+                        delay(SEARCH_SPACING_MS)
 
-                        // 2) Fanart.tv: mejor artistthumb (1 request)
-                        val thumbUrl = FanartClient.fetchBestThumbUrl(result.match.mbid, userKey)
-                        delay(REMOTE_CALL_SPACING_MS)
+                        // Persistir resolución en Room (identidad + URL)
+                        artistDao.upsertAll(
+                            listOf(
+                                ArtistEntity(
+                                    name = name,
+                                    deezerId = result.artist.id,
+                                    imageUrl = result.artist.pictureBig,
+                                    updatedAt = now
+                                )
+                            )
+                        )
 
-                        // 3) Descarga de imagen a disco (solo si hay URL)
-                        if (thumbUrl != null) {
-                            downloadAndSave(name, thumbUrl)
+                        // Encolar descarga de imagen (si hay URL)
+                        result.artist.pictureBig?.let { url ->
+                            pendingDownloads += name to url
                         }
+                    }
+                }
+            }
 
-                        // 4) Persistir resolución en Room
-                        artistDao.upsertAll(
-                            listOf(
-                                ArtistEntity(
-                                    name = name,
-                                    mbid = result.match.mbid,
-                                    disambiguation = result.match.disambiguation,
-                                    thumbUrl = thumbUrl,
-                                    updatedAt = now
-                                )
-                            )
-                        )
+            // Descargas paralelizadas (máximo DOWNLOAD_WORKERS a la vez)
+            if (pendingDownloads.isNotEmpty()) {
+                coroutineScope {
+                    pendingDownloads.forEach { (name, url) ->
+                        launch { downloadAndSave(name, url) }
                     }
                 }
             }
@@ -188,37 +191,42 @@ class ArtistImageRepository(
     // Internals
     // =========================================================================
 
-    /** Descarga [url] y la guarda en disco como MD5(name)+extensión. Idempotente. */
+    /**
+     * Descarga [url] y la guarda en disco como MD5(name)+extensión.
+     * Idempotente y limitada por [downloadSemaphore].
+     */
     private suspend fun downloadAndSave(name: String, url: String): Boolean =
         withContext(Dispatchers.IO) {
-            if (findOnDisk(name) != null) return@withContext true
-            var connection: HttpURLConnection? = null
-            try {
-                val conn = (URI(url).toURL().openConnection() as HttpURLConnection).apply {
-                    requestMethod = "GET"
-                    connectTimeout = DOWNLOAD_TIMEOUT_MS
-                    readTimeout = DOWNLOAD_TIMEOUT_MS
-                }
-                connection = conn
-                if (conn.responseCode != HttpURLConnection.HTTP_OK) return@withContext false
-                val bytes = conn.inputStream.use { it.readBytes() }
-                if (bytes.isEmpty()) return@withContext false
+            downloadSemaphore.withLock {
+                if (findOnDisk(name) != null) return@withContext true
+                var connection: HttpURLConnection? = null
+                try {
+                    val conn = (URI(url).toURL().openConnection() as HttpURLConnection).apply {
+                        requestMethod = "GET"
+                        connectTimeout = DOWNLOAD_TIMEOUT_MS
+                        readTimeout = DOWNLOAD_TIMEOUT_MS
+                    }
+                    connection = conn
+                    if (conn.responseCode != HttpURLConnection.HTTP_OK) return@withContext false
+                    val bytes = conn.inputStream.use { it.readBytes() }
+                    if (bytes.isEmpty()) return@withContext false
 
-                val cacheKey = md5(name)
-                val target = File(diskCacheDir, "$cacheKey${detectExtension(bytes)}")
-                val temp = File(diskCacheDir, "$cacheKey.tmp")
-                FileOutputStream(temp).use { it.write(bytes) }
-                if (!temp.renameTo(target)) {
-                    temp.delete()
+                    val cacheKey = md5(name)
+                    val target = File(diskCacheDir, "$cacheKey${detectExtension(bytes)}")
+                    val temp = File(diskCacheDir, "$cacheKey.tmp")
+                    FileOutputStream(temp).use { it.write(bytes) }
+                    if (!temp.renameTo(target)) {
+                        temp.delete()
+                        false
+                    } else {
+                        fileCache[name] = target
+                        true
+                    }
+                } catch (_: Exception) {
                     false
-                } else {
-                    fileCache[name] = target
-                    true
+                } finally {
+                    connection?.disconnect()
                 }
-            } catch (_: Exception) {
-                false
-            } finally {
-                connection?.disconnect()
             }
         }
 
@@ -259,9 +267,16 @@ class ArtistImageRepository(
     }
 
     companion object {
-        /** ~1.1s entre llamadas remotas (rate limit MusicBrainz 1 req/s). */
-        private const val REMOTE_CALL_SPACING_MS = 1100L
+        /** ~300ms entre búsquedas (uso conservador, términos Deezer). */
+        private const val SEARCH_SPACING_MS = 300L
         private const val DOWNLOAD_TIMEOUT_MS = 15_000
+
+        /** Workers simultáneos de descarga de imagen. */
+        private const val DOWNLOAD_WORKERS = 4
+
+        /** deezerId sentinel: artista buscado y NO encontrado (negativo cacheable). */
+        const val NOT_FOUND_ID = -1L
+
         private val EXTENSIONS = listOf(".jpg", ".png", ".webp", ".img")
     }
 }

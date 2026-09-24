@@ -18,9 +18,9 @@ import com.openplayer.music.ui.theme.LocalTracksCountTextColor
  * Pantalla de inicio de OpenPlayer.
  *
  * Actualmente muestra un placeholder centrado y la atribución de
- * fanart.tv exigida por sus términos generales ("si tienes un programa
- * disponible públicamente, debes informar a tus usuarios de este sitio
- * web y de las imágenes que utilizas").
+ * Deezer exigida por sus términos de uso para desarrolladores
+ * (uso no comercial e información al usuario de que el contenido
+ * es de uso estrictamente privado y del ámbito familiar).
  *
  * ## Geometría de la atribución
  * - Esquina superior IZQUIERDA óptica del contenido de pestaña: mismos
@@ -52,10 +52,12 @@ fun HomeScreen(modifier: Modifier = Modifier) {
             color = MaterialTheme.colorScheme.onBackground
         )
 
-        // Atribución de fanart.tv (términos generales del servicio).
+        // Atribución de Deezer (términos de uso para desarrolladores):
+        // informa la fuente de las imágenes de artista y el ámbito de
+        // uso privado y familiar del contenido.
         // Esquina superior izquierda óptica, bajo la barra de estado.
         Text(
-            text = stringResource(R.string.fanart_attribution),
+            text = stringResource(R.string.artist_images_attribution),
             fontSize = 10.sp,
             color = attributionColor,
             modifier = Modifier

@@ -30,7 +30,7 @@ import com.openplayer.music.data.media.PlaylistRepository
  * Expone [artistImageRepository] como singleton para que la pestaña
  * de Artistas y cualquier futuro consumidor compartan el mismo caché
  * de disco/memoria y la misma cola de enriquecido remoto
- * (MusicBrainz → Fanart.tv → Room).
+ * (Deezer → disco → Room).
  *
  * ## PlaylistRepository singleton
  * Expone [playlistRepository] como singleton para que cualquier
@@ -63,11 +63,12 @@ class OpenPlayerApplication : Application() {
 
     /**
      * Singleton de [ArtistImageRepository]: pipeline de imágenes de
-     * artista (MusicBrainz → Fanart.tv → disco → Room) compartido por
-     * toda la app, con cola secuencial y cachés unificados.
+     * artista (Deezer → disco → Room) compartido por toda la app, con
+     * búsquedas secuenciales espaciadas, descargas paralelizadas y
+     * cachés unificados.
      */
     val artistImageRepository: ArtistImageRepository by lazy {
-        ArtistImageRepository(applicationContext, appDatabase, appPreferences)
+        ArtistImageRepository(applicationContext, appDatabase)
     }
 
     /**

@@ -43,5 +43,5 @@
     <string name="search_section_songs">Tracks</string>
     <string name="search_section_playlists">Playlists</string>
     <string name="search_empty_query">Type to search your library</string>
-    <string name="fanart_attribution">Artist images by fanart.tv</string>
+    <string name="artist_images_attribution">Artist images by Deezer. Content for private and family use.</string>
 </resources>

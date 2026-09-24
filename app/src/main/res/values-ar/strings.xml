@@ -43,5 +43,5 @@
     <string name="search_section_songs">المقطوعات</string>
     <string name="search_section_playlists">قوائم التشغيل</string>
     <string name="search_empty_query">اكتب للبحث في مكتبتك</string>
-    <string name="fanart_attribution">صور الفنانين بواسطة fanart.tv</string>
+    <string name="artist_images_attribution">صور الفنانين بواسطة Deezer. المحتوى للاستخدام الخاص والعائلي.</string>
 </resources>

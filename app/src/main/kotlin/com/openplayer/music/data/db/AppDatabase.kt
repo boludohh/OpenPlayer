@@ -10,12 +10,16 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 /**
  * Base de datos Room de OpenPlayer.
  *
+ * - version = 6: la tabla "artists" se reconstruyó para el pipeline
+ *   Deezer (columnas name, deezerId, imageUrl, updatedAt). La
+ *   migración 5→6 es QUIRÚRGICA: hace DROP+CREATE únicamente de
+ *   "artists" (caché reconstruible); "songs", "playlists" y
+ *   "playlist_songs" (datos del usuario) quedan intactos.
  * - version = 5: se agregaron las tablas "playlists" y "playlist_songs"
  *   (datos del usuario). La migración 4→5 es REAL (no destructiva):
  *   las playlists del usuario se preservan entre actualizaciones.
- * - version = 4: se agregó la tabla "artists" (caché reconstruible del
- *   enriquecimiento remoto MusicBrainz → Fanart.tv: MBID, URL de imagen
- *   y timestamp). Al igual que "songs", no contiene datos del usuario.
+ * - version = 4: se agregó la tabla "artists" original (caché del
+ *   enriquecimiento MusicBrainz → Fanart.tv, hoy reemplazado por Deezer).
  * - version = 3: se eliminaron las columnas de MediaInfo (realFormat,
  *   formatVersion, formatProfile, compressionMode, containerFormat,
  *   bitDepth, streamSize) y los campos descriptivos no utilizados
@@ -23,9 +27,9 @@ import androidx.sqlite.db.SupportSQLiteDatabase
  *   comment). El esquema se simplificó a los campos realmente usados.
  * - fallbackToDestructiveMigration(dropAllTables = true): ÚLTIMO
  *   recurso para migraciones destructivas no contempladas; NO debe
- *   aplicarse a las tablas de datos del usuario (playlists). La
- *   migración 4→5 está registrada explícitamente y se ejecuta ANTES
- *   de cualquier fallback, preservando las playlists.
+ *   aplicarse a las tablas de datos del usuario (playlists). Las
+ *   migraciones 4→5 y 5→6 están registradas explícitamente y se
+ *   ejecutan ANTES de cualquier fallback.
  * - exportSchema = false: no se requiere directorio de exportación
  *   de esquemas para el uso actual del proyecto.
  * - Singleton thread-safe por proceso.
@@ -37,7 +41,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         PlaylistEntity::class,
         PlaylistSongEntity::class
     ],
-    version = 5,
+    version = 6,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -61,7 +65,7 @@ abstract class AppDatabase : RoomDatabase() {
 
         private fun buildDatabase(context: Context): AppDatabase =
             Room.databaseBuilder(context, AppDatabase::class.java, DATABASE_NAME)
-                .addMigrations(MIGRATION_4_5)
+                .addMigrations(MIGRATION_4_5, MIGRATION_5_6)
                 .fallbackToDestructiveMigration(dropAllTables = true)
                 .build()
 
@@ -118,6 +122,34 @@ abstract class AppDatabase : RoomDatabase() {
                     """
                     CREATE INDEX IF NOT EXISTS `index_playlist_songs_songId`
                     ON `playlist_songs` (`songId`)
+                    """.trimIndent()
+                )
+            }
+        }
+
+        /**
+         * Migración 5→6: reconstruye la tabla "artists" para el
+         * pipeline Deezer (deezerId + imageUrl en lugar de mbid +
+         * disambiguation + thumbUrl).
+         *
+         * Es QUIRÚRGICA: el DROP afecta ÚNICAMENTE a "artists", que es
+         * un caché reconstruible sin datos del usuario. "songs",
+         * "playlists" y "playlist_songs" no se tocan en absoluto.
+         * Tras la migración, la pestaña Artistas re-enriquece todo el
+         * caché contra Deezer en la primera visita.
+         */
+        private val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("DROP TABLE IF EXISTS `artists`")
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `artists` (
+                        `name` TEXT NOT NULL,
+                        `deezerId` INTEGER NOT NULL,
+                        `imageUrl` TEXT,
+                        `updatedAt` INTEGER NOT NULL,
+                        PRIMARY KEY(`name`)
+                    )
                     """.trimIndent()
                 )
             }

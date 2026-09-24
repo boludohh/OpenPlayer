@@ -80,12 +80,6 @@ jobs:
           keyPassword=${{ secrets.KEYSTORE_KEY_PASSWORD }}
           EOF
 
-      - name: Reconstruir local.properties desde el Secret
-        run: |
-          cat <<EOF > local.properties
-          FANART_API_KEY=${{ secrets.FANART_API_KEY }}
-          EOF
-
       - name: Compilar APK de Release firmado
         env:
           GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx9g -XX:+UseParallelGC -Dfile.encoding=UTF-8"
@@ -99,9 +93,9 @@ jobs:
           path: app/build/reports/lint-results-release.*
           retention-days: 30
 
-      - name: Eliminar archivos temporales
+      - name: Eliminar el keystore temporal
         if: always()
-        run: rm -f app/keystore/openplayer-release-key.jks app/keystore.properties local.properties
+        run: rm -f app/keystore/openplayer-release-key.jks app/keystore.properties
 
       - name: Subir APK como Artifact
         uses: actions/upload-artifact@v4

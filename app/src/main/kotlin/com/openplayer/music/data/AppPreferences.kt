@@ -26,9 +26,6 @@ private val Context.openPlayerDataStore by preferencesDataStore(name = "openplay
  * - El idioma elegido por el usuario.
  * - El timestamp (segundos epoch) del último escaneo de MediaStore,
  *   usado por el mecanismo de escaneo incremental.
- * - La clave API personal de Fanart.tv del usuario (opcional),
- *   preparada técnicamente para enviarse como `client_key`; su UI de
- *   entrada llegará más adelante en Ajustes.
  *
  * Expone Flows reactivos para uso en Compose y setters suspend.
  * Incluye lecturas bloqueantes únicamente para el arranque de las
@@ -67,17 +64,6 @@ class AppPreferences(private val context: Context) {
             prefs[KEY_LAST_SCAN_SECONDS]
         }
 
-    /**
-     * Clave API personal de Fanart.tv del usuario; null si no la ha
-     * configurado. Se envía como `client_key` junto a la clave de
-     * proyecto (término general 2 de fanart.tv). Sin UI por ahora:
-     * queda preparada técnicamente para conectarse luego en Ajustes.
-     */
-    val fanartUserKey: Flow<String?> =
-        context.openPlayerDataStore.data.map { prefs ->
-            prefs[KEY_FANART_USER_KEY]?.takeIf { it.isNotBlank() }
-        }
-
     suspend fun setSetupCompleted(completed: Boolean) {
         context.openPlayerDataStore.edit { prefs ->
             prefs[KEY_SETUP_COMPLETED] = completed
@@ -110,20 +96,6 @@ class AppPreferences(private val context: Context) {
         }
     }
 
-    /**
-     * Guarda (o limpia con null/blank) la clave personal de Fanart.tv
-     * del usuario. Preparado para la futura UI de Ajustes.
-     */
-    suspend fun setFanartUserKey(key: String?) {
-        context.openPlayerDataStore.edit { prefs ->
-            if (key.isNullOrBlank()) {
-                prefs.remove(KEY_FANART_USER_KEY)
-            } else {
-                prefs[KEY_FANART_USER_KEY] = key.trim()
-            }
-        }
-    }
-
     // ===== Lecturas bloqueantes, SOLO para el arranque de Activities =====
 
     fun isSetupCompletedBlocking(): Boolean =
@@ -140,6 +112,5 @@ class AppPreferences(private val context: Context) {
         private val KEY_THEME_MODE = stringPreferencesKey("theme_mode")
         private val KEY_LANGUAGE = stringPreferencesKey("language")
         private val KEY_LAST_SCAN_SECONDS = longPreferencesKey("last_scan_seconds")
-        private val KEY_FANART_USER_KEY = stringPreferencesKey("fanart_user_key")
     }
 }
