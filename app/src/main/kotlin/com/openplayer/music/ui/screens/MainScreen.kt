@@ -18,7 +18,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import com.openplayer.music.OpenPlayerApplication
 import com.openplayer.music.data.media.AudioRepository
 import com.openplayer.music.ui.components.BottomNavigationPanel
 import com.openplayer.music.ui.components.TopActionBar
@@ -56,8 +58,15 @@ import com.openplayer.music.ui.screens.tracks.TracksScreen
  */
 @Composable
 fun MainScreen(audioRepository: AudioRepository) {
+    val context = LocalContext.current
     // Estado de navegación compartido con el panel inferior
     var selectedTab by remember { mutableStateOf(NavTab.HOME) }
+
+    // Singleton de PlaylistRepository desde la Application: compartido
+    // por toda la app y pasado como parámetro a la pantalla de listas.
+    val playlistRepository = remember {
+        (context.applicationContext as OpenPlayerApplication).playlistRepository
+    }
 
     Box(
         modifier = Modifier
@@ -86,7 +95,7 @@ fun MainScreen(audioRepository: AudioRepository) {
                 NavTab.TRACKS -> TracksScreen(audioRepository = audioRepository)
                 NavTab.ALBUMS -> AlbumsScreen()
                 NavTab.ARTISTS -> ArtistsScreen(audioRepository = audioRepository)
-                NavTab.PLAYLISTS -> PlaylistScreen()
+                NavTab.PLAYLISTS -> PlaylistScreen(playlistRepository = playlistRepository)
             }
         }
 
