@@ -75,6 +75,27 @@ class PlaylistRepository(
     }.flowOn(Dispatchers.IO)
 
     /**
+     * Búsqueda reactiva de playlists por coincidencia parcial en el
+     * nombre. Usado por la pantalla de búsqueda global.
+     *
+     * @param query Texto de búsqueda (sin wildcards; se añaden aquí).
+     * @return Flow reactivo que se re-emite cuando cambia la query
+     *         o cuando la tabla playlists cambia.
+     */
+    fun searchPlaylists(query: String): Flow<List<Playlist>> {
+        val pattern = "%${query.trim()}%"
+        return combine(
+            playlistDao.searchPlaylists(pattern),
+            playlistDao.getSongCounts()
+        ) { entities, counts ->
+            val countMap = counts.associate { it.playlistId to it.count }
+            entities.map { entity ->
+                Playlist.fromEntity(entity, countMap[entity.id] ?: 0)
+            }
+        }.flowOn(Dispatchers.IO)
+    }
+
+    /**
      * Crea una playlist nueva con el nombre dado.
      *
      * @throws IllegalArgumentException si ya existe una playlist con

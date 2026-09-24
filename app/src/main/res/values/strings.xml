@@ -38,5 +38,10 @@
     <string name="playlist_screen_placeholder">Listas de reproducción</string>
     <string name="playlist_empty_state">Aún no has creado ninguna lista de reproducción</string>
     <string name="search_placeholder">Buscar</string>
+    <string name="search_hint">Buscar canciones, artistas, álbumes…</string>
+    <string name="search_no_results">No se encontraron resultados</string>
+    <string name="search_section_songs">Canciones</string>
+    <string name="search_section_playlists">Listas de reproducción</string>
+    <string name="search_empty_query">Escribe para buscar en tu biblioteca</string>
     <string name="fanart_attribution">Imágenes de artistas por fanart.tv</string>
 </resources>

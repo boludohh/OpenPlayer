@@ -235,6 +235,9 @@ fun PlaylistScreen(
  * geometría es idéntica a TrackRow (64dp de alto, paddings
  * consistentes) para mantener coherencia visual entre pestañas.
  *
+ * **Visibilidad internal**: permite reutilización desde SearchScreen
+ * para mostrar resultados de búsqueda de playlists sin duplicar código.
+ *
  * ## Próximamente (fase de UI pulida)
  * - Icono personalizado (mosaico de carátulas de las primeras
  *   canciones, o icono temático).
@@ -242,7 +245,7 @@ fun PlaylistScreen(
  * - Navegación a la pantalla de detalle de la playlist.
  */
 @Composable
-private fun PlaylistRow(
+internal fun PlaylistRow(
     playlist: Playlist,
     modifier: Modifier = Modifier
 ) {

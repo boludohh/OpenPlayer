@@ -38,5 +38,10 @@
     <string name="playlist_screen_placeholder">قوائم التشغيل</string>
     <string name="playlist_empty_state">لم تقم بإنشاء أي قائمة تشغيل بعد</string>
     <string name="search_placeholder">بحث</string>
+    <string name="search_hint">البحث عن المقطوعات والفنانين والألبومات…</string>
+    <string name="search_no_results">لم يتم العثور على نتائج</string>
+    <string name="search_section_songs">المقطوعات</string>
+    <string name="search_section_playlists">قوائم التشغيل</string>
+    <string name="search_empty_query">اكتب للبحث في مكتبتك</string>
     <string name="fanart_attribution">صور الفنانين بواسطة fanart.tv</string>
 </resources>

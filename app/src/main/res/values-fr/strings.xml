@@ -38,5 +38,10 @@
     <string name="playlist_screen_placeholder">Listes de lecture</string>
     <string name="playlist_empty_state">Vous n\'avez pas encore créé de liste de lecture</string>
     <string name="search_placeholder">Rechercher</string>
+    <string name="search_hint">Rechercher pistes, artistes, albums…</string>
+    <string name="search_no_results">Aucun résultat trouvé</string>
+    <string name="search_section_songs">Pistes</string>
+    <string name="search_section_playlists">Listes de lecture</string>
+    <string name="search_empty_query">Tapez pour rechercher dans votre bibliothèque</string>
     <string name="fanart_attribution">Images d\'artistes par fanart.tv</string>
 </resources>

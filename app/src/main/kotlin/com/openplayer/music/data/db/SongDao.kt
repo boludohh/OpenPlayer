@@ -45,6 +45,25 @@ interface SongDao {
     @Query("SELECT * FROM songs WHERE id IN (:ids)")
     suspend fun getByIds(ids: List<Long>): List<SongEntity>
 
+    /**
+     * Búsqueda de canciones por coincidencia parcial (LIKE) en
+     * título, artista o álbum. Case-insensitive por defecto en SQLite.
+     * Usado por la pantalla de búsqueda global.
+     *
+     * @param query Patrón de búsqueda con wildcards (%query%).
+     */
+    @Query(
+        """
+        SELECT * FROM songs 
+        WHERE title LIKE :query 
+           OR artist LIKE :query 
+           OR album LIKE :query
+        ORDER BY title ASC
+        LIMIT 50
+        """
+    )
+    fun searchSongs(query: String): Flow<List<SongEntity>>
+
     /** Cantidad de canciones; sirve para detectar "Room vacío". */
     @Query("SELECT COUNT(*) FROM songs")
     suspend fun count(): Int

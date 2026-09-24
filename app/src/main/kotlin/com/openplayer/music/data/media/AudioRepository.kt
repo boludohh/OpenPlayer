@@ -143,6 +143,19 @@ class AudioRepository(
     // =========================================================================
 
     /**
+     * Búsqueda reactiva de canciones por coincidencia parcial en
+     * título, artista o álbum. Usado por la pantalla de búsqueda global.
+     *
+     * @param query Texto de búsqueda (sin wildcards; se añaden aquí).
+     * @return Flow reactivo que se re-emite cuando cambia la query
+     *         o cuando la tabla songs cambia (nuevas canciones, etc.).
+     */
+    fun searchSongs(query: String): Flow<List<com.openplayer.music.data.model.Song>> {
+        val pattern = "%${query.trim()}%"
+        return songDao.searchSongs(pattern).map { entities -> entities.map { it.toSong() } }
+    }
+
+    /**
      * Ejecuta un escaneo completo si Room está vacío. Es la
      * llamada típica desde la Splash (LoadingScreen) en la
      * primera apertura.

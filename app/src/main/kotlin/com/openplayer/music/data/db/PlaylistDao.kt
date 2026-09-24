@@ -46,6 +46,23 @@ interface PlaylistDao {
     @Query("SELECT * FROM playlists WHERE id = :id")
     suspend fun getPlaylistById(id: Long): PlaylistEntity?
 
+    /**
+     * Búsqueda de playlists por coincidencia parcial (LIKE) en el nombre.
+     * Case-insensitive por defecto en SQLite. Usado por la pantalla
+     * de búsqueda global.
+     *
+     * @param query Patrón de búsqueda con wildcards (%query%).
+     */
+    @Query(
+        """
+        SELECT * FROM playlists 
+        WHERE name LIKE :query
+        ORDER BY createdAt DESC
+        LIMIT 20
+        """
+    )
+    fun searchPlaylists(query: String): Flow<List<PlaylistEntity>>
+
     /** Verifica si existe una playlist con el nombre dado. */
     @Query("SELECT EXISTS(SELECT 1 FROM playlists WHERE name = :name)")
     suspend fun existsByName(name: String): Boolean
