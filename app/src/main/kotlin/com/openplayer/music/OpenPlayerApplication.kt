@@ -6,6 +6,7 @@ import com.openplayer.music.data.db.AppDatabase
 import com.openplayer.music.data.media.ArtistImageRepository
 import com.openplayer.music.data.media.AudioRepository
 import com.openplayer.music.data.media.CoverRepository
+import com.openplayer.music.data.media.PlaylistRepository
 
 /**
  * Application class personalizada de OpenPlayer.
@@ -30,6 +31,12 @@ import com.openplayer.music.data.media.CoverRepository
  * de Artistas y cualquier futuro consumidor compartan el mismo caché
  * de disco/memoria y la misma cola de enriquecido remoto
  * (MusicBrainz → Fanart.tv → Room).
+ *
+ * ## PlaylistRepository singleton
+ * Expone [playlistRepository] como singleton para que cualquier
+ * pantalla (PlaylistScreen, diálogos de añadir a playlist, etc.)
+ * comparta el mismo acceso a las playlists del usuario y al mismo
+ * Flow reactivo.
  */
 class OpenPlayerApplication : Application() {
 
@@ -61,5 +68,14 @@ class OpenPlayerApplication : Application() {
      */
     val artistImageRepository: ArtistImageRepository by lazy {
         ArtistImageRepository(applicationContext, appDatabase, appPreferences)
+    }
+
+    /**
+     * Singleton de [PlaylistRepository]: acceso unificado a las
+     * playlists del usuario (crear, renombrar, eliminar, añadir/quitar
+     * canciones, reordenar) y Flow reactivo de playlists con contadores.
+     */
+    val playlistRepository: PlaylistRepository by lazy {
+        PlaylistRepository(appDatabase)
     }
 }

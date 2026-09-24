@@ -35,6 +35,16 @@ interface SongDao {
     @Query("SELECT * FROM songs WHERE id = :id")
     suspend fun getById(id: Long): SongEntity?
 
+    /**
+     * Varias canciones por sus ids de MediaStore. Usado por
+     * [com.openplayer.music.data.media.PlaylistRepository] para
+     * resolver las canciones de una playlist. El orden de la
+     * respuesta NO está garantizado; el ordenamiento por posición
+     * lo hace el repositorio.
+     */
+    @Query("SELECT * FROM songs WHERE id IN (:ids)")
+    suspend fun getByIds(ids: List<Long>): List<SongEntity>
+
     /** Cantidad de canciones; sirve para detectar "Room vacío". */
     @Query("SELECT COUNT(*) FROM songs")
     suspend fun count(): Int

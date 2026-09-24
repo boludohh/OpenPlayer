@@ -3,6 +3,7 @@
     <string name="main_placeholder">Écran principal</string>
     <string name="main_songs_count">%1$d pistes</string>
     <string name="main_artists_count">%1$d artistes</string>
+    <string name="main_playlists_count">%1$d listes</string>
     <string name="welcome_title">Bienvenue sur</string>
     <string name="loading_tagline">Bien plus qu\'un lecteur traditionnel</string>
     <string name="start_button">Commencer</string>
@@ -35,6 +36,7 @@
     <string name="albums_screen_placeholder">Albums</string>
     <string name="artists_screen_placeholder">Artistes</string>
     <string name="playlist_screen_placeholder">Listes de lecture</string>
+    <string name="playlist_empty_state">Vous n\'avez pas encore créé de liste de lecture</string>
     <string name="search_placeholder">Rechercher</string>
     <string name="fanart_attribution">Images d\'artistes par fanart.tv</string>
 </resources>
