@@ -68,6 +68,12 @@ fun MainScreen(audioRepository: AudioRepository) {
         (context.applicationContext as OpenPlayerApplication).playlistRepository
     }
 
+    // Singleton de PlaybackHistoryRepository desde la Application: compartido
+    // por toda la app y pasado como parámetro a la pantalla de inicio.
+    val playbackHistoryRepository = remember {
+        (context.applicationContext as OpenPlayerApplication).playbackHistoryRepository
+    }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -91,7 +97,10 @@ fun MainScreen(audioRepository: AudioRepository) {
                 .padding(top = 43.dp, bottom = 130.dp)
         ) { tab ->
             when (tab) {
-                NavTab.HOME -> HomeScreen()
+                NavTab.HOME -> HomeScreen(
+                    audioRepository = audioRepository,
+                    playbackHistoryRepository = playbackHistoryRepository
+                )
                 NavTab.TRACKS -> TracksScreen(audioRepository = audioRepository)
                 NavTab.ALBUMS -> AlbumsScreen(audioRepository = audioRepository)
                 NavTab.ARTISTS -> ArtistsScreen(audioRepository = audioRepository)
