@@ -1049,7 +1049,7 @@ fun com.openplayer.music.data.model.Song.toMediaItem(
         .setTitle(title)
         .setArtist(artist)
         .setAlbumTitle(album)
-        .setArtworkUri(coverFile?.toURI()?.toString())
+        .setArtworkUri(coverFile?.let { android.net.Uri.fromFile(it) })
         .build()
 
     return MediaItem.Builder()
