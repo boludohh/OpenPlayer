@@ -1,3 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">OpenPlayer</string>
     <string name="main_placeholder">الشاشة الرئيسية</string>
@@ -6,6 +7,12 @@
     <string name="main_albums_count">%1$d ألبومات</string>
     <string name="main_playlists_count">%1$d قوائم</string>
     <string name="welcome_title">مرحبًا بك في</string>
+    <string name="welcome_tagline">موسيقاك، بطريقتك.</string>
+    <string name="welcome_description">شغّل مكتبتك المحلية بدون إعلانات ولا متتبعات وبتحكم كامل.</string>
+    <string name="welcome_feature_local">موسيقى محلية</string>
+    <string name="welcome_feature_no_ads">بدون إعلانات</string>
+    <string name="welcome_feature_open_source">مفتوح المصدر</string>
+    <string name="welcome_feature_customizable">قابل للتخصيص</string>
     <string name="loading_tagline">أكثر من مشغل تقليدي</string>
     <string name="start_button">ابدأ</string>
     <string name="finish_button">إنهاء</string>

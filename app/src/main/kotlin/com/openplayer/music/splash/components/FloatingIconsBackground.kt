@@ -25,27 +25,20 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import com.openplayer.music.R
 import com.openplayer.music.ui.theme.LocalFloatingIconColor
-import kotlin.math.sqrt
 import kotlin.math.sin
 import kotlin.random.Random
 
 /**
  * Recursos de iconos disponibles para el fondo flotante.
- * 12 iconos únicos relacionados con música/sonido.
+ * 5 iconos únicos relacionados con música/sonido, cada uno aparece
+ * una sola vez en la pantalla (no se repiten).
  */
 private val floatingIconResources = listOf(
-    R.drawable.ic_floating_1,  // avión de papel
-    R.drawable.ic_floating_2,  // notas musicales dobles
-    R.drawable.ic_floating_3,  // auriculares
-    R.drawable.ic_floating_4,  // nota musical con círculo
-    R.drawable.ic_floating_5,  // clave de sol
-    R.drawable.ic_floating_6,  // señal de radio/ondas
-    R.drawable.ic_floating_7,  // reproductor de música
-    R.drawable.ic_floating_8,  // nota musical simple
-    R.drawable.ic_floating_9,  // corchea con banderola
-    R.drawable.ic_floating_10, // nota con flag larga
-    R.drawable.ic_floating_11, // nota doble corchea beamed
-    R.drawable.ic_floating_12  // barras de ecualizador
+    R.drawable.ic_float_disc,        // disco de vinilo
+    R.drawable.ic_float_note,        // doble nota musical
+    R.drawable.ic_float_headphones,  // audífonos
+    R.drawable.ic_float_equalizer,   // barras de ecualizador
+    R.drawable.ic_float_headset      // headset/diadema
 )
 
 /**
@@ -65,51 +58,39 @@ private data class FloatingIconSpec(
     val sizeDp: Float,
     val rotationDegrees: Float,
     val alpha: Float,
-    val durationMillis: Int,
-    val phaseOffsetMillis: Int,
     val phaseOffsetX: Float,
     val phaseOffsetY: Float,
     val frequencyMultiplierX: Float,
     val frequencyMultiplierY: Float
 )
 
-private const val TARGET_ICON_COUNT = 85
-private const val MIN_ICON_SIZE_DP = 30f
-private const val MAX_ICON_SIZE_DP = 80f
-private const val MIN_ALPHA = 0.15f
-private const val MAX_ALPHA = 0.45f
-private const val MIN_ANIM_DURATION_MS = 3000
-private const val MAX_ANIM_DURATION_MS = 6000
-private const val FLOAT_AMPLITUDE_DP = 5f
-private const val MIN_GAP_DP = 8f
+/** Tamaño de los iconos gigantes (80-120dp). */
+private const val MIN_ICON_SIZE_DP = 80f
+private const val MAX_ICON_SIZE_DP = 120f
+private const val MIN_ALPHA = 0.12f
+private const val MAX_ALPHA = 0.28f
+private const val MIN_ANIM_DURATION_MS = 4000
+private const val MAX_ANIM_DURATION_MS = 7000
+private const val FLOAT_AMPLITUDE_DP = 8f
+private const val MIN_GAP_DP = 40f
 
 /**
- * Rejilla de celdas para el muestreo estratificado.
- * 8 columnas × 16 filas = 128 celdas, suficiente margen para
- * colocar 85 iconos sin que queden regiones vacías.
- * El aspect ratio ~1:2 se aproxima al de pantallas móviles modernas.
+ * Posiciones predefinidas para los 5 iconos gigantes.
+ * Distribuidas estratégicamente por la pantalla para evitar el centro
+ * (donde va el contenido principal) y cubrir esquinas y laterales.
  */
-private const val GRID_COLS = 8
-private const val GRID_ROWS = 16
-
-/**
- * Porcentaje de margen dentro de cada celda donde NO se colocan
- * iconos. Un valor de 0.2f mantiene el icono dentro del 60% central
- * de cada celda, evitando que queden pegados al borde de la celda
- * y dando un aspecto orgánico y no rejilla-perfecta.
- */
-private const val CELL_JITTER = 0.2f
-
-/**
- * Máximo de intentos de jitter dentro de una celda antes de
- * descartarla (si colisiona en todos los intentos, se omite).
- */
-private const val MAX_JITTER_ATTEMPTS_PER_CELL = 20
+private val predefinedPositions = listOf(
+    0.15f to 0.18f,  // superior-izquierda
+    0.85f to 0.25f,  // superior-derecha
+    0.20f to 0.75f,  // inferior-izquierda
+    0.80f to 0.82f,  // inferior-derecha
+    0.50f to 0.50f   // centro (detrás del contenido)
+)
 
 /**
  * Semilla fija para el generador aleatorio.
- * Garantiza que las posiciones sean consistentes cada vez
- * que se entra a la pantalla de bienvenida.
+ * Garantiza que las rotaciones, tamaños y fases sean consistentes
+ * cada vez que se entra a la pantalla de bienvenida.
  */
 private const val RANDOM_SEED = 42L
 
@@ -117,30 +98,21 @@ private const val RANDOM_SEED = 42L
  * Fondo con iconos flotantes para la pantalla de bienvenida.
  *
  * Comportamiento:
- * - Coloca ~85 iconos distribuidos uniformemente por toda la
- *   pantalla (centro, laterales, bordes superior/inferior, las 4
- *   esquinas) mediante muestreo estratificado por celdas.
- * - Cada icono tiene tamaño (30-80dp), rotación, opacidad y fase de
- *   animación aleatorios dentro de rangos definidos.
- * - Animación sutil e infinita de flotación (vaivén de ±5dp).
+ * - Coloca exactamente 5 iconos gigantes (80-120dp) distribuidos por
+ *   la pantalla en posiciones predefinidas (esquinas y centro).
+ * - Cada icono aparece una sola vez (no se repiten).
+ * - Animación sutil e infinita de flotación (vaivén de ±8dp).
  * - Todos los iconos usan el color custom floatingIcon del tema
  *   activo (LocalFloatingIconColor), adaptándose automáticamente
- *   a claro (#D9D9D9) / oscuro (#333333) / AMOLED (#212121).
- * - Las posiciones se generan una sola vez con remember para
- *   evitar recálculos durante la animación.
- * - Se posicionan usando el tamaño real del contenedor padre
- *   (medido con onSizeChanged) para una distribución correcta
- *   independientemente del tamaño de pantalla.
+ *   a los 3 temas.
+ * - Las posiciones son fijas pero la rotación, tamaño y fase de
+ *   animación son aleatorios dentro de rangos definidos.
  *
  * **Optimización: un solo `infiniteTransition` compartido**.
- * Anteriormente cada uno de los ~85 iconos tenía 2 animaciones
- * infinitas independientes (~170 animaciones corriendo en paralelo).
- * Ahora un único `rememberInfiniteTransition` a nivel del
- * composable principal genera una fase global (valor 0..1 que
- * crece continuamente), y cada icono deriva su desplazamiento
- * aplicando su propia fase/frecuencia/multiplicador. El resultado
- * visual es idéntico (movimientos no sincronizados, orgánicos),
- * pero solo hay 1 animación en el reloj de Compose en vez de 170.
+ * Un único `rememberInfiniteTransition` genera una fase global, y
+ * cada icono deriva su desplazamiento aplicando su propia fase y
+ * frecuencia. Solo hay 1 animación en el reloj de Compose en vez
+ * de 10 animaciones independientes.
  */
 @Composable
 fun FloatingIconsBackground(modifier: Modifier = Modifier) {
@@ -148,15 +120,12 @@ fun FloatingIconsBackground(modifier: Modifier = Modifier) {
     val density = LocalDensity.current
 
     val specs = remember {
-        generateStratifiedIcons(random = Random(RANDOM_SEED))
+        generateFixedIcons(random = Random(RANDOM_SEED))
     }
 
     var containerSize by remember { mutableStateOf(IntSize.Zero) }
 
-    // ÚNICA animación infinita para todo el fondo: una fase global
-    // que crece de 0 a 1 con la duración máxima del rango. Cada
-    // icono aplicará su propia fase/frecuencia para derivar su
-    // vaivén independiente, manteniendo el aspecto orgánico.
+    // ÚNICA animación infinita para todo el fondo
     val infiniteTransition = rememberInfiniteTransition(label = "floatingGlobal")
     val globalPhase by infiniteTransition.animateFloat(
         initialValue = 0f,
@@ -194,13 +163,7 @@ fun FloatingIconsBackground(modifier: Modifier = Modifier) {
 /**
  * Icono flotante individual con desplazamiento derivado de la fase
  * global compartida. Cada icono aplica su propia fase y frecuencia
- * para tener un movimiento independiente (no sincronizado con los
- * demás), logrando el mismo look orgánico que con animaciones
- * separadas pero con un solo reloj de animación activo.
- *
- * Usa `sin()` sobre la fase global para generar vaivén suave,
- * y [FloatingIconSpec.frequencyMultiplierX] / [FloatingIconSpec.frequencyMultiplierY]
- * para variar la velocidad por icono.
+ * para tener un movimiento independiente.
  */
 @Composable
 private fun StaticFloatingIcon(
@@ -211,18 +174,12 @@ private fun StaticFloatingIcon(
     containerHeightPx: Int,
     density: Float
 ) {
-    // Derivar desplazamientos X e Y desde la fase global con
-    // senos desfasados y de frecuencia distinta, para que cada
-    // icono tenga su propio movimiento orgánico.
-    // phaseX/Y ∈ [0, 2π) y frequencyMultiplierX/Y ∈ [0.6, 1.4]
     val phaseX = (globalPhase * spec.frequencyMultiplierX + spec.phaseOffsetX) * 2f * Math.PI.toFloat()
     val phaseY = (globalPhase * spec.frequencyMultiplierY + spec.phaseOffsetY) * 2f * Math.PI.toFloat()
 
     val offsetX = sin(phaseX) * FLOAT_AMPLITUDE_DP
     val offsetY = sin(phaseY) * FLOAT_AMPLITUDE_DP
 
-    // Posición base en dp, a partir de las fracciones y el tamaño
-    // real del contenedor padre.
     val baseXDp = (spec.xFraction * containerWidthPx / density)
     val baseYDp = (spec.yFraction * containerHeightPx / density)
 
@@ -242,104 +199,35 @@ private fun StaticFloatingIcon(
 }
 
 /**
- * Genera iconos flotantes mediante muestreo estratificado por celdas.
- *
- * Algoritmo:
- * 1. Crear la lista de todas las celdas de la rejilla (GRID_COLS × GRID_ROWS).
- * 2. Barajar la lista de celdas con la semilla fija.
- * 3. Para cada una de las primeras TARGET_ICON_COUNT celdas barajadas:
- *    - Generar un tamaño aleatorio para el icono.
- *    - Probar posiciones aleatorias dentro de la celda (jitter),
- *      hasta encontrar una que no colisione con iconos ya colocados.
- *    - Si después de MAX_JITTER_ATTEMPTS_PER_CELL no se encuentra
- *      una posición libre, descartar la celda y continuar con la
- *      siguiente (puede resultar en menos de TARGET_ICON_COUNT iconos
- *      en pantallas muy pequeñas, pero normalmente se colocan todos).
- *
- * Ventajas sobre el muestreo aleatorio puro:
- * - Garantiza cobertura uniforme de toda la pantalla.
- * - Elimina el problema de regiones vacías por azar (huecos).
- * - Mantiene el aspecto orgánico mediante jitter, rotación y
- *   tamaños/opacidades aleatorios.
- *
- * Cada icono ahora también recibe [FloatingIconSpec.phaseOffsetX],
- * [FloatingIconSpec.phaseOffsetY], [FloatingIconSpec.frequencyMultiplierX]
- * y [FloatingIconSpec.frequencyMultiplierY] para que su movimiento
- * derivado de la fase global tenga un ritmo independiente.
+ * Genera los 5 iconos flotantes con posiciones predefinidas pero
+ * rotaciones, tamaños y fases aleatorios.
  */
-private fun generateStratifiedIcons(random: Random): List<FloatingIconSpec> {
+private fun generateFixedIcons(random: Random): List<FloatingIconSpec> {
     val specs = mutableListOf<FloatingIconSpec>()
 
-    // Paso 1: crear la lista de todas las celdas
-    val allCells = mutableListOf<Pair<Int, Int>>()
-    for (col in 0 until GRID_COLS) {
-        for (row in 0 until GRID_ROWS) {
-            allCells.add(col to row)
-        }
-    }
-
-    // Paso 2: barajar las celdas con la semilla fija
-    allCells.shuffle(random)
-
-    // Paso 3: colocar iconos en las primeras TARGET_ICON_COUNT celdas
-    val cellWidth = 1f / GRID_COLS
-    val cellHeight = 1f / GRID_ROWS
-    val jitterRangeX = cellWidth * (1f - 2f * CELL_JITTER)
-    val jitterRangeY = cellHeight * (1f - 2f * CELL_JITTER)
-
-    for (i in 0 until minOf(TARGET_ICON_COUNT, allCells.size)) {
-        val (col, row) = allCells[i]
-        val cellBaseX = col * cellWidth
-        val cellBaseY = row * cellHeight
+    floatingIconResources.forEachIndexed { index, iconRes ->
+        val (xFraction, yFraction) = predefinedPositions[index]
 
         val sizeDp = random.nextFloat() * (MAX_ICON_SIZE_DP - MIN_ICON_SIZE_DP) + MIN_ICON_SIZE_DP
+        val freqX = 0.6f + random.nextFloat() * 0.8f
+        val freqY = 0.6f + random.nextFloat() * 0.8f
+        val phaseX = random.nextFloat()
+        val phaseY = random.nextFloat()
 
-        // Intentar encontrar una posición dentro de la celda que no colisione
-        var placed = false
-        for (attempt in 0 until MAX_JITTER_ATTEMPTS_PER_CELL) {
-            // Posición con jitter dentro del rango central de la celda
-            val xFraction = cellBaseX + cellWidth * CELL_JITTER + random.nextFloat() * jitterRangeX
-            val yFraction = cellBaseY + cellHeight * CELL_JITTER + random.nextFloat() * jitterRangeY
-
-            // Verificar colisión con iconos ya colocados
-            val hasCollision = specs.any { existing ->
-                val dx = (xFraction - existing.xFraction) * 1000f
-                val dy = (yFraction - existing.yFraction) * 1000f
-                val distance = sqrt(dx * dx + dy * dy)
-                val minDistance = (sizeDp + existing.sizeDp) / 2f + MIN_GAP_DP
-                distance < minDistance
-            }
-
-            if (!hasCollision) {
-                // Frecuencias en [0.6, 1.4] para variar velocidad por icono
-                val freqX = 0.6f + random.nextFloat() * 0.8f
-                val freqY = 0.6f + random.nextFloat() * 0.8f
-                // Fases en [0, 1) para desfasar cada icono
-                val phaseX = random.nextFloat()
-                val phaseY = random.nextFloat()
-
-                specs.add(
-                    FloatingIconSpec(
-                        iconRes = floatingIconResources[random.nextInt(floatingIconResources.size)],
-                        xFraction = xFraction,
-                        yFraction = yFraction,
-                        sizeDp = sizeDp,
-                        rotationDegrees = random.nextFloat() * 360f,
-                        alpha = random.nextFloat() * (MAX_ALPHA - MIN_ALPHA) + MIN_ALPHA,
-                        durationMillis = random.nextInt(MIN_ANIM_DURATION_MS, MAX_ANIM_DURATION_MS + 1),
-                        phaseOffsetMillis = random.nextInt(0, MAX_ANIM_DURATION_MS),
-                        phaseOffsetX = phaseX,
-                        phaseOffsetY = phaseY,
-                        frequencyMultiplierX = freqX,
-                        frequencyMultiplierY = freqY
-                    )
-                )
-                placed = true
-                break
-            }
-        }
-        // Si no se colocó después de todos los intentos, se descarta
-        // la celda (caso muy raro en pantallas normales)
+        specs.add(
+            FloatingIconSpec(
+                iconRes = iconRes,
+                xFraction = xFraction,
+                yFraction = yFraction,
+                sizeDp = sizeDp,
+                rotationDegrees = random.nextFloat() * 360f,
+                alpha = random.nextFloat() * (MAX_ALPHA - MIN_ALPHA) + MIN_ALPHA,
+                phaseOffsetX = phaseX,
+                phaseOffsetY = phaseY,
+                frequencyMultiplierX = freqX,
+                frequencyMultiplierY = freqY
+            )
+        )
     }
 
     return specs

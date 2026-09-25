@@ -1,3 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">OpenPlayer</string>
     <string name="main_placeholder">Ecrã principal</string>
@@ -6,6 +7,12 @@
     <string name="main_albums_count">%1$d álbuns</string>
     <string name="main_playlists_count">%1$d listas</string>
     <string name="welcome_title">Bem-vindo ao</string>
+    <string name="welcome_tagline">A tua música, à tua maneira.</string>
+    <string name="welcome_description">Reproduz a tua biblioteca local sem anúncios, sem rastreadores e com controlo total.</string>
+    <string name="welcome_feature_local">Música local</string>
+    <string name="welcome_feature_no_ads">Sem anúncios</string>
+    <string name="welcome_feature_open_source">Código aberto</string>
+    <string name="welcome_feature_customizable">Personalizável</string>
     <string name="loading_tagline">Mais do que um reprodutor tradicional</string>
     <string name="start_button">Começar</string>
     <string name="finish_button">Concluir</string>
