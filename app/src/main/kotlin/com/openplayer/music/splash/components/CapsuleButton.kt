@@ -22,20 +22,22 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import com.openplayer.music.R
+import com.openplayer.music.ui.theme.LocalCardL2Color
 
 /**
  * Cápsula reutilizable de la Splash (Comenzar / Finalizar).
  *
- * - [filled] = true: cápsula sólida con fondo surfaceVariant
- *   (#F2F2F2 en claro, #262626 en oscuro, #151515 en AMOLED),
- *   texto y flecha en inverseOnSurface (#1A1A1A / #F5F5F5 / #E5E5E5),
- *   y un círculo interno con scrim (#E0E0E0 / #363636 / #222222).
- *   Incluye un ícono circular con flecha al final del texto.
+ * - [filled] = true: cápsula sólida con fondo surfaceVariant (cardL1
+ *   en los 3 temas), texto y flecha en inverseOnSurface (highContrast),
+ *   y un círculo interno con LocalCardL2Color (cardL2, superficie
+ *   elevada nivel 2 según el documento de colores). Incluye un ícono
+ *   circular con flecha al final del texto.
  * - [filled] = false: cápsula con borde, para acciones secundarias.
  *
- * Todos los colores provienen de slots semánticos del tema, por lo
- * que el botón se adapta automáticamente a los tres temas sin
- * necesidad de lógica condicional por ThemeMode.
+ * Todos los colores provienen de slots semánticos del tema o de los
+ * nuevos CompositionLocals (LocalCardL2Color), por lo que el botón se
+ * adapta automáticamente a los tres temas sin necesidad de lógica
+ * condicional por ThemeMode.
  */
 @Composable
 fun CapsuleButton(
@@ -54,7 +56,7 @@ fun CapsuleButton(
     } else {
         MaterialTheme.colorScheme.onSurface
     }
-    val circleBgColor = MaterialTheme.colorScheme.scrim
+    val circleBgColor = LocalCardL2Color.current
 
     Surface(
         onClick = onClick,

@@ -27,6 +27,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import com.openplayer.music.R
+import com.openplayer.music.ui.theme.LocalActiveBorderColor
+import com.openplayer.music.ui.theme.LocalCardL2Color
 
 /**
  * Estado de un permiso en una tarjeta de la Splash.
@@ -44,8 +46,8 @@ enum class PermissionState {
  * icono circular a la izquierda, título y descripción.
  *
  * Se usa para las tarjetas de permisos y para las de idioma.
- * - [selected]: resalta el borde con outlineVariant (#1A1A1A en claro,
- *   #E5E5E5 en oscuro, #D4D4D4 en AMOLED) para el idioma activo.
+ * - [selected]: resalta el borde con LocalActiveBorderColor (highContrast
+ *   en los 3 temas, máximo contraste) para el idioma activo.
  * - [permissionState]: muestra icono de estado del permiso con
  *   transición suave (Crossfade) entre X roja (DENIED) y check verde
  *   (GRANTED). `null` para tarjetas sin icono de estado (idiomas).
@@ -58,11 +60,11 @@ enum class PermissionState {
  *   redondea arriba, la última redondea abajo y las intermedias van
  *   rectas y alineadas.
  *
- * El círculo que contiene el icono usa scrim (#E0E0E0 en claro,
- * #363636 en oscuro, #222222 en AMOLED). El icono dentro del círculo
- * y el título de la tarjeta usan inverseOnSurface (#1A1A1A en claro,
- * #F5F5F5 en oscuro, #E5E5E5 en AMOLED), excepto cuando iconAsFlag
- * es true (las banderas mantienen sus colores originales).
+ * El círculo que contiene el icono usa LocalCardL2Color (superficie
+ * elevada nivel 2 según el documento de colores). El icono dentro del
+ * círculo y el título de la tarjeta usan inverseOnSurface (highContrast
+ * en los 3 temas), excepto cuando iconAsFlag es true (las banderas
+ * mantienen sus colores originales).
  */
 @Composable
 fun SplashCard(
@@ -78,7 +80,7 @@ fun SplashCard(
     onClick: (() -> Unit)? = null
 ) {
     val border = if (selected) {
-        BorderStroke(2.dp, MaterialTheme.colorScheme.outlineVariant)
+        BorderStroke(2.dp, LocalActiveBorderColor.current)
     } else {
         null
     }
@@ -101,7 +103,7 @@ fun SplashCard(
                 modifier = Modifier
                     .size(44.dp)
                     .background(
-                        MaterialTheme.colorScheme.scrim,
+                        LocalCardL2Color.current,
                         CircleShape
                     ),
                 contentAlignment = Alignment.Center

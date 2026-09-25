@@ -2,137 +2,112 @@ package com.openplayer.music.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-// ----- Tema Claro -----
-val LightPrimary = Color(0xFFB3261E)
-val LightOnPrimary = Color(0xFFFFFFFF)
-val LightPrimaryContainer = Color(0xFFF9DEDC)
-val LightOnPrimaryContainer = Color(0xFF410002)
-val LightSecondary = Color(0xFF775652)
-val LightOnSecondary = Color(0xFFFFFFFF)
-val LightSecondaryContainer = Color(0xFFFFDAD5)
-val LightOnSecondaryContainer = Color(0xFF2C1512)
-val LightTertiary = Color(0xFF16A34A)
-val LightOnTertiary = Color(0xFFFFFFFF)
-val LightTertiaryContainer = Color(0xFFDCFCE7)
-val LightOnTertiaryContainer = Color(0xFF052E16)
-val LightError = Color(0xFFDC2626)
-val LightOnError = Color(0xFFFFFFFF)
-val LightErrorContainer = Color(0xFFFEE2E2)
-val LightOnErrorContainer = Color(0xFF450A0A)
+// =========================================================================
+// Tokens base del sistema de colores de OpenPlayer
+// =========================================================================
+//
+// Diseño basado en jerarquía de superficies + bordes + contenido por
+// contexto, con cero duplicados de valores hex entre temas.
+//
+// Tokens principales:
+// - background: fondo principal de toda la pantalla
+// - cardL1: superficie elevada nivel 1 (filas, tarjetas principales)
+// - cardL2: superficie elevada nivel 2 (elementos anidados en cardL1)
+// - borderL1: borde decorativo nivel 1 (separa cards del fondo)
+// - borderL2: borde decorativo nivel 2 (separa elementos anidados)
+// - highContrast: texto principal, iconos funcionales/activos, bordes
+//   activos (absorbe todos los antiguos topBarIcon, navActive, sun/moon,
+//   listItemTitle, screenTitle, currentTrackBorder, etc.)
+// - secondaryOnBg: texto secundario, conteos, iconos decorativos
+//   (absorbe tracksCountText, listItemSubtitle, floatingIcon)
+// - inactiveOnBg: estados apagados (tabs inactivas, toggles off, meta,
+//   placeholder icons; absorbe navIconInactive, listItemMeta,
+//   coverPlaceholderIcon)
+// - error/success/warning familias: colores semánticos con sus 4
+//   variantes (color, on-color, container, on-container)
+// - scrim: overlay oscuro para modales (#000000 @32% en los 3 temas)
+//
+// Mapeo a Material3 slots (ver Theme.kt):
+// - primary / onPrimary → highContrast / background (sin acento propio,
+//   coherencia total con el tema neutro)
+// - tertiary → success (el verde semántico para checks GRANTED)
+// - surfaceVariant → cardL1
+// - outline / outlineVariant → borderL1 / borderL2
+
+// =========================================================================
+// Tema Claro
+// =========================================================================
+
 val LightBackground = Color(0xFFFFFFFF)
-val LightOnBackground = Color(0xFF1C1B1A)
-val LightSurface = Color(0xFFFFFFFF)
-val LightOnSurface = Color(0xFF1C1B1A)
-val LightSurfaceVariant = Color(0xFFF2F2F2)
-val LightOnSurfaceVariant = Color(0xFF525252)
-val LightOutline = Color(0xFF857370)
-val LightOutlineVariant = Color(0xFF1A1A1A)
-val LightScrim = Color(0xFFE0E0E0)
-val LightInverseOnSurface = Color(0xFF1A1A1A)
-val LightFloatingIcon = Color(0xFFD9D9D9)
+val LightCardL1 = Color(0xFFF5F5F5)
+val LightCardL2 = Color(0xFFEBEBEB)
+val LightBorderL1 = Color(0xFFE0E0E0)
+val LightBorderL2 = Color(0xFFD0D0D0)
+val LightHighContrast = Color(0xFF1C1B1F)
+val LightSecondaryOnBg = Color(0xFF6E6E73)
+val LightInactiveOnBg = Color(0xFF8E8E93)
+val LightError = Color(0xFFBA1A1A)
+val LightOnError = Color(0xFFFFFFFF)
+val LightErrorContainer = Color(0xFFFFDAD6)
+val LightOnErrorContainer = Color(0xFF410002)
+val LightSuccess = Color(0xFF2E6E3E)
+val LightOnSuccess = Color(0xFFFFFFFF)
+val LightSuccessContainer = Color(0xFFC3F2CB)
+val LightOnSuccessContainer = Color(0xFF002106)
+val LightWarning = Color(0xFF7A5900)
+val LightOnWarning = Color(0xFFFFFFFF)
+val LightWarningContainer = Color(0xFFFFDF9B)
+val LightOnWarningContainer = Color(0xFF271900)
+val LightScrim = Color(0x52000000)
 
-// Colores específicos para iconos de tema (sol/luna)
-val LightSunIconColor = Color(0xFF1A1A1A)
+// =========================================================================
+// Tema Oscuro
+// =========================================================================
 
-// Colores para iconos de navegación
-val LightNavIconActive = Color(0xFF1A1A1A)
-val LightNavIconInactive = Color(0xFFA3A3A3)
+val DarkBackground = Color(0xFF1C1B1F)
+val DarkCardL1 = Color(0xFF242328)
+val DarkCardL2 = Color(0xFF2C2B30)
+val DarkBorderL1 = Color(0xFF3A383E)
+val DarkBorderL2 = Color(0xFF454348)
+val DarkHighContrast = Color(0xFFE6E1E5)
+val DarkSecondaryOnBg = Color(0xFF9A979E)
+val DarkInactiveOnBg = Color(0xFF948F96)
+val DarkError = Color(0xFFFFB4AB)
+val DarkOnError = Color(0xFF690005)
+val DarkErrorContainer = Color(0xFF93000A)
+val DarkOnErrorContainer = Color(0xFFFFDAD6)
+val DarkSuccess = Color(0xFF8FDA9C)
+val DarkOnSuccess = Color(0xFF00390F)
+val DarkSuccessContainer = Color(0xFF14531F)
+val DarkOnSuccessContainer = Color(0xFFC3F2CB)
+val DarkWarning = Color(0xFFF6BE3F)
+val DarkOnWarning = Color(0xFF3F2E00)
+val DarkWarningContainer = Color(0xFF5C4300)
+val DarkOnWarningContainer = Color(0xFFFFDF9B)
+val DarkScrim = Color(0x52000000)
 
-// Colores para iconos de la barra superior
-val LightTopBarIcon = Color(0xFF1A1A1A)
+// =========================================================================
+// Tema AMOLED (negro puro)
+// =========================================================================
 
-// Color para el texto de conteo de pistas
-val LightTracksCountText = Color(0xFF525252)
-
-// Color de fondo para la pista actualmente en reproducción
-val LightCurrentTrackBackground = Color(0xFFE8E8E8)
-
-// ----- Tema Oscuro -----
-val DarkPrimary = Color(0xFFF2B8B0)
-val DarkOnPrimary = Color(0xFF601410)
-val DarkPrimaryContainer = Color(0xFF8C1D18)
-val DarkOnPrimaryContainer = Color(0xFFF9DEDC)
-val DarkSecondary = Color(0xFFE7BDB7)
-val DarkOnSecondary = Color(0xFF442926)
-val DarkSecondaryContainer = Color(0xFF5D3F3B)
-val DarkOnSecondaryContainer = Color(0xFFFFDAD5)
-val DarkTertiary = Color(0xFF4ADE80)
-val DarkOnTertiary = Color(0xFF052E16)
-val DarkTertiaryContainer = Color(0xFF166534)
-val DarkOnTertiaryContainer = Color(0xFFDCFCE7)
-val DarkError = Color(0xFFF87171)
-val DarkOnError = Color(0xFF450A0A)
-val DarkErrorContainer = Color(0xFF7F1D1D)
-val DarkOnErrorContainer = Color(0xFFFEE2E2)
-val DarkBackground = Color(0xFF151515)
-val DarkOnBackground = Color(0xFFE6E1E0)
-val DarkSurface = Color(0xFF151515)
-val DarkOnSurface = Color(0xFFE6E1E0)
-val DarkSurfaceVariant = Color(0xFF262626)
-val DarkOnSurfaceVariant = Color(0xFFB3B3B3)
-val DarkOutline = Color(0xFFA08C89)
-val DarkOutlineVariant = Color(0xFFE5E5E5)
-val DarkScrim = Color(0xFF363636)
-val DarkInverseOnSurface = Color(0xFFF5F5F5)
-val DarkFloatingIcon = Color(0xFF333333)
-
-// Colores específicos para iconos de tema (sol/luna)
-val DarkMoonIconColor = Color(0xFFF5F5F5)
-
-// Colores para iconos de navegación
-val DarkNavIconActive = Color(0xFFF5F5F5)
-val DarkNavIconInactive = Color(0xFF8C8C8C)
-
-// Colores para iconos de la barra superior
-val DarkTopBarIcon = Color(0xFFF5F5F5)
-
-// Color para el texto de conteo de pistas
-val DarkTracksCountText = Color(0xFFB3B3B3)
-
-// Color de fondo para la pista actualmente en reproducción
-val DarkCurrentTrackBackground = Color(0xFF202020)
-
-// ----- Tema AMOLED (negro puro) -----
-val AmoledPrimary = Color(0xFFF2B8B0)
-val AmoledOnPrimary = Color(0xFF601410)
-val AmoledPrimaryContainer = Color(0xFF8C1D18)
-val AmoledOnPrimaryContainer = Color(0xFFF9DEDC)
-val AmoledSecondary = Color(0xFFE7BDB7)
-val AmoledOnSecondary = Color(0xFF442926)
-val AmoledSecondaryContainer = Color(0xFF3A2522)
-val AmoledOnSecondaryContainer = Color(0xFFFFDAD5)
-val AmoledTertiary = Color(0xFF22C55E)
-val AmoledOnTertiary = Color(0xFF052E16)
-val AmoledTertiaryContainer = Color(0xFF14532D)
-val AmoledOnTertiaryContainer = Color(0xFFDCFCE7)
-val AmoledError = Color(0xFFEF4444)
-val AmoledOnError = Color(0xFF450A0A)
-val AmoledErrorContainer = Color(0xFF7F1D1D)
-val AmoledOnErrorContainer = Color(0xFFFEE2E2)
 val AmoledBackground = Color(0xFF000000)
-val AmoledOnBackground = Color(0xFFE6E1E0)
-val AmoledSurface = Color(0xFF000000)
-val AmoledOnSurface = Color(0xFFE6E1E0)
-val AmoledSurfaceVariant = Color(0xFF151515)
-val AmoledOnSurfaceVariant = Color(0xFFA3A3A3)
-val AmoledOutline = Color(0xFF8A7673)
-val AmoledOutlineVariant = Color(0xFFD4D4D4)
-val AmoledScrim = Color(0xFF222222)
-val AmoledInverseOnSurface = Color(0xFFE5E5E5)
-val AmoledFloatingIcon = Color(0xFF212121)
-
-// Colores específicos para iconos de tema (sol/luna)
-val AmoledMoonIconColor = Color(0xFFE5E5E5)
-
-// Colores para iconos de navegación
-val AmoledNavIconActive = Color(0xFFE5E5E5)
-val AmoledNavIconInactive = Color(0xFF737373)
-
-// Colores para iconos de la barra superior
-val AmoledTopBarIcon = Color(0xFFE5E5E5)
-
-// Color para el texto de conteo de pistas
-val AmoledTracksCountText = Color(0xFFA3A3A3)
-
-// Color de fondo para la pista actualmente en reproducción
-val AmoledCurrentTrackBackground = Color(0xFF101010)
+val AmoledCardL1 = Color(0xFF121212)
+val AmoledCardL2 = Color(0xFF1C1C1C)
+val AmoledBorderL1 = Color(0xFF2A2A2A)
+val AmoledBorderL2 = Color(0xFF333333)
+val AmoledHighContrast = Color(0xFFE6E1E5)
+val AmoledSecondaryOnBg = Color(0xFF9A979E)
+val AmoledInactiveOnBg = Color(0xFF948F96)
+val AmoledError = Color(0xFFFFB4AB)
+val AmoledOnError = Color(0xFF690005)
+val AmoledErrorContainer = Color(0xFF7A0006)
+val AmoledOnErrorContainer = Color(0xFFFFDAD6)
+val AmoledSuccess = Color(0xFF8FDA9C)
+val AmoledOnSuccess = Color(0xFF00390F)
+val AmoledSuccessContainer = Color(0xFF0E4517)
+val AmoledOnSuccessContainer = Color(0xFFC3F2CB)
+val AmoledWarning = Color(0xFFF6BE3F)
+val AmoledOnWarning = Color(0xFF3F2E00)
+val AmoledWarningContainer = Color(0xFF4C3800)
+val AmoledOnWarningContainer = Color(0xFFFFDF9B)
+val AmoledScrim = Color(0x52000000)

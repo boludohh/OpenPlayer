@@ -9,238 +9,233 @@ import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
 
+// =========================================================================
+// CompositionLocals de colores personalizados
+// =========================================================================
+//
+// Estos CompositionLocals permiten acceder a colores semánticos según
+// el tema activo sin necesidad de pasar parámetros a cada componente.
+//
+// Los nombres de los Locals se mantienen por compatibilidad con el código
+// existente; internamente ahora apuntan a los tokens base del nuevo
+// sistema (sin duplicados de valores hex):
+// - LocalFloatingIconColor → secondaryOnBg
+// - LocalNavIconActiveColor → highContrast
+// - LocalNavIconInactiveColor → inactiveOnBg
+// - LocalTopBarIconColor → highContrast
+// - LocalTracksCountTextColor → secondaryOnBg
+// - LocalScreenTitleColor → highContrast
+// - LocalListItemTitleColor → highContrast
+// - LocalListItemSubtitleColor → secondaryOnBg
+// - LocalListItemMetaColor → inactiveOnBg
+// - LocalCoverPlaceholderIconColor → inactiveOnBg
+// - LocalCurrentTrackColor → cardL1
+// - LocalCurrentTrackBorderColor → highContrast
+// - LocalCardL2Color → cardL2 (NUEVO: libera scrim de uso atípico)
+// - LocalActiveBorderColor → highContrast (NUEVO: borde de selección activa)
+
 /**
  * Color custom para los iconos flotantes de la pantalla de bienvenida.
- * Se provee mediante CompositionLocal en OpenPlayerTheme para que
- * cualquier componente descendiente pueda acceder al color correcto
- * según el tema activo, sin necesidad de pasar parámetros.
- *
- * Valores:
- * - Claro: #D9D9D9
- * - Oscuro: #333333
- * - AMOLED: #212121
+ * Apunta a secondaryOnBg (texto/iconos decorativos de contraste medio).
  */
 val LocalFloatingIconColor = compositionLocalOf { Color.Gray }
 
-/**
- * Color para iconos de navegación activos.
- * Se provee mediante CompositionLocal para acceso global según el tema.
- */
+/** Color para iconos de navegación activos. Apunta a highContrast. */
 val LocalNavIconActiveColor = compositionLocalOf { Color.Black }
 
-/**
- * Color para iconos de navegación inactivos.
- * Se provee mediante CompositionLocal para acceso global según el tema.
- */
+/** Color para iconos de navegación inactivos. Apunta a inactiveOnBg. */
 val LocalNavIconInactiveColor = compositionLocalOf { Color.Gray }
 
 /**
  * Color para iconos de la barra superior (menú y búsqueda).
- * Se provee mediante CompositionLocal para acceso global según el tema.
- *
- * Valores:
- * - Claro: #1A1A1A
- * - Oscuro: #F5F5F5
- * - AMOLED: #E5E5E5
+ * Apunta a highContrast (iconos funcionales de máximo contraste).
  */
 val LocalTopBarIconColor = compositionLocalOf { Color.Black }
 
 /**
  * Color para el texto de conteo de pistas en la pantalla de Tracks.
- * Se provee mediante CompositionLocal para acceso global según el tema.
- *
- * Valores:
- * - Claro: #525252
- * - Oscuro: #B3B3B3
- * - AMOLED: #A3A3A3
+ * Apunta a secondaryOnBg (texto secundario).
  */
 val LocalTracksCountTextColor = compositionLocalOf { Color.Gray }
 
 /**
  * Color para el título de pantalla (Pistas, Álbumes, Artistas, etc.).
- * Se provee mediante CompositionLocal para acceso global según el tema.
- * Reutiliza los mismos colores que los iconos de la barra superior.
- *
- * Valores:
- * - Claro: #1A1A1A
- * - Oscuro: #F5F5F5
- * - AMOLED: #E5E5E5
+ * Apunta a highContrast (texto principal).
  */
 val LocalScreenTitleColor = compositionLocalOf { Color.Black }
 
 /**
- * Color para títulos de ítem de lista (título de pista, nombre de álbum, etc.).
- * Genérico y reutilizable en Tracks/Albums/Artists/Playlists.
- * Reutiliza los mismos colores que los iconos de la barra superior.
- *
- * Valores:
- * - Claro: #1A1A1A
- * - Oscuro: #F5F5F5
- * - AMOLED: #E5E5E5
+ * Color para títulos de ítem de lista (título de pista, nombre de
+ * álbum, etc.). Apunta a highContrast (texto principal).
  */
 val LocalListItemTitleColor = compositionLocalOf { Color.Black }
 
 /**
- * Color para subtítulos de ítem de lista (artista de pista, cantidad de
- * canciones, etc.). Genérico y reutilizable en Tracks/Albums/Artists/Playlists.
- * Reutiliza los mismos colores que el texto de conteo de pistas.
- *
- * Valores:
- * - Claro: #525252
- * - Oscuro: #B3B3B3
- * - AMOLED: #A3A3A3
+ * Color para subtítulos de ítem de lista (artista de pista, cantidad
+ * de canciones, etc.). Apunta a secondaryOnBg (texto secundario).
  */
 val LocalListItemSubtitleColor = compositionLocalOf { Color.Gray }
 
 /**
  * Color para metadatos de ítem de lista (texto de duración de pista,
- * icono de más opciones, etc.). Genérico y reutilizable en
- * Tracks/Albums/Artists/Playlists.
- * Reutiliza los mismos colores que los iconos de navegación inactivos.
- *
- * Valores:
- * - Claro: #A3A3A3
- * - Oscuro: #8C8C8C
- * - AMOLED: #737373
+ * icono de más opciones, etc.). Apunta a inactiveOnBg.
  */
 val LocalListItemMetaColor = compositionLocalOf { Color.Gray }
 
 /**
- * Color del icono dentro del placeholder de carátula (cuando una canción
- * no tiene portada extraída). Genérico y reutilizable en Tracks/Albums.
- * Reutiliza los mismos colores que los iconos de navegación inactivos.
- *
- * Valores:
- * - Claro: #A3A3A3
- * - Oscuro: #8C8C8C
- * - AMOLED: #737373
+ * Color del icono dentro del placeholder de carátula (cuando una
+ * canción no tiene portada extraída). Apunta a inactiveOnBg.
  */
 val LocalCoverPlaceholderIconColor = compositionLocalOf { Color.Gray }
 
 /**
  * Color de fondo del contenedor de la pista actualmente en reproducción.
- * Genérico y reutilizable en Tracks/Albums/Artists/Playlists.
- * Se aplica al Row de la fila como fondo, detrás de carátula/textos/iconos.
- *
- * Valores:
- * - Claro: #E8E8E8
- * - Oscuro: #181818
- * - AMOLED: #070707
+ * Apunta a cardL1 (superficie elevada nivel 1).
  */
 val LocalCurrentTrackColor = compositionLocalOf { Color.Gray }
 
 /**
  * Color del recuadro bordeado que rodea la fila de la pista actualmente
- * en reproducción (indicador visual de pista actual). Genérico y
- * reutilizable en Tracks/Albums/Artists/Playlists.
- * Reutiliza los mismos colores que los iconos de la barra superior,
- * sin duplicar valores en Color.kt.
- *
- * Valores:
- * - Claro: #1A1A1A
- * - Oscuro: #F5F5F5
- * - AMOLED: #E5E5E5
+ * en reproducción. Apunta a highContrast (borde activo funcional).
  */
 val LocalCurrentTrackBorderColor = compositionLocalOf { Color.Black }
 
 /**
- * Familia de fuentes activa según el idioma actual.
- * Se provee mediante CompositionLocal en ThemeSwitcherHost para que
- * todos los componentes de tipografía usen la familia correcta:
- * - IBM Plex Sans para idiomas no árabes (es, en, pt, pt-BR, fr)
- * - IBM Plex Sans Arabic para árabe (ar)
+ * NUEVO: Color de superficie elevada nivel 2 (elementos anidados dentro
+ * de una Card Nivel 1: círculos de iconos, chips, sub-paneles).
  *
- * Los estilos de tipografía (bodyLarge, screenTitle, etc.) leen este
- * CompositionLocal y usan la familia apropiada automáticamente.
+ * Se introduce para liberar a `colorScheme.scrim` de su uso atípico
+ * como "fondo de círculo de icono" en SplashCard y CapsuleButton. El
+ * scrim real ahora queda disponible exclusivamente para overlays de
+ * modales/bottom sheets según el documento de colores (#000000 @32%).
+ */
+val LocalCardL2Color = compositionLocalOf { Color.Gray }
+
+/**
+ * NUEVO: Color de borde de estado activo (selección, pista actual,
+ * opción marcada). Apunta a highContrast (máximo contraste funcional).
+ *
+ * Reservado idealmente para el color "primary" una vez definido;
+ * mientras tanto usa el valor neutro de máximo contraste del tema.
+ */
+val LocalActiveBorderColor = compositionLocalOf { Color.Black }
+
+/**
+ * Familia de fuentes activa según el idioma actual.
+ * IBM Plex Sans para idiomas no árabes; IBM Plex Sans Arabic para árabe.
  */
 val LocalAppFontFamily = compositionLocalOf { IBMPlexSansFamily }
 
+// =========================================================================
+// Esquemas de color Material3
+// =========================================================================
+//
+// Mapeo de tokens base a slots de Material3 para que los consumidores
+// de `MaterialTheme.colorScheme.*` obtengan los colores correctos sin
+// cambios de código.
+//
+// Decisiones clave:
+// - `primary` = highContrast (sin acento propio, coherencia neutra)
+// - `tertiary` = success (el verde semántico para checks GRANTED)
+// - `surfaceVariant` = cardL1 (superficie principal de componentes)
+// - `inverseOnSurface` = highContrast (texto sobre fondo)
+
 private val LightColors = lightColorScheme(
-    primary = LightPrimary,
-    onPrimary = LightOnPrimary,
-    primaryContainer = LightPrimaryContainer,
-    onPrimaryContainer = LightOnPrimaryContainer,
-    secondary = LightSecondary,
-    onSecondary = LightOnSecondary,
-    secondaryContainer = LightSecondaryContainer,
-    onSecondaryContainer = LightOnSecondaryContainer,
-    tertiary = LightTertiary,
-    onTertiary = LightOnTertiary,
-    tertiaryContainer = LightTertiaryContainer,
-    onTertiaryContainer = LightOnTertiaryContainer,
+    primary = LightHighContrast,
+    onPrimary = LightBackground,
+    primaryContainer = LightCardL2,
+    onPrimaryContainer = LightHighContrast,
+    secondary = LightSecondaryOnBg,
+    onSecondary = LightBackground,
+    secondaryContainer = LightCardL2,
+    onSecondaryContainer = LightHighContrast,
+    tertiary = LightSuccess,
+    onTertiary = LightOnSuccess,
+    tertiaryContainer = LightSuccessContainer,
+    onTertiaryContainer = LightOnSuccessContainer,
     error = LightError,
     onError = LightOnError,
     errorContainer = LightErrorContainer,
     onErrorContainer = LightOnErrorContainer,
     background = LightBackground,
-    onBackground = LightOnBackground,
-    surface = LightSurface,
-    onSurface = LightOnSurface,
-    surfaceVariant = LightSurfaceVariant,
-    onSurfaceVariant = LightOnSurfaceVariant,
-    outline = LightOutline,
-    outlineVariant = LightOutlineVariant,
+    onBackground = LightHighContrast,
+    surface = LightBackground,
+    onSurface = LightHighContrast,
+    surfaceVariant = LightCardL1,
+    onSurfaceVariant = LightSecondaryOnBg,
+    outline = LightBorderL1,
+    outlineVariant = LightBorderL2,
     scrim = LightScrim,
-    inverseOnSurface = LightInverseOnSurface
+    inverseOnSurface = LightHighContrast,
+    inverseSurface = LightHighContrast,
+    inversePrimary = LightBackground
 )
 
 private val DarkColors = darkColorScheme(
-    primary = DarkPrimary,
-    onPrimary = DarkOnPrimary,
-    primaryContainer = DarkPrimaryContainer,
-    onPrimaryContainer = DarkOnPrimaryContainer,
-    secondary = DarkSecondary,
-    onSecondary = DarkOnSecondary,
-    secondaryContainer = DarkSecondaryContainer,
-    onSecondaryContainer = DarkOnSecondaryContainer,
-    tertiary = DarkTertiary,
-    onTertiary = DarkOnTertiary,
-    tertiaryContainer = DarkTertiaryContainer,
-    onTertiaryContainer = DarkOnTertiaryContainer,
+    primary = DarkHighContrast,
+    onPrimary = DarkBackground,
+    primaryContainer = DarkCardL2,
+    onPrimaryContainer = DarkHighContrast,
+    secondary = DarkSecondaryOnBg,
+    onSecondary = DarkBackground,
+    secondaryContainer = DarkCardL2,
+    onSecondaryContainer = DarkHighContrast,
+    tertiary = DarkSuccess,
+    onTertiary = DarkOnSuccess,
+    tertiaryContainer = DarkSuccessContainer,
+    onTertiaryContainer = DarkOnSuccessContainer,
     error = DarkError,
     onError = DarkOnError,
     errorContainer = DarkErrorContainer,
     onErrorContainer = DarkOnErrorContainer,
     background = DarkBackground,
-    onBackground = DarkOnBackground,
-    surface = DarkSurface,
-    onSurface = DarkOnSurface,
-    surfaceVariant = DarkSurfaceVariant,
-    onSurfaceVariant = DarkOnSurfaceVariant,
-    outline = DarkOutline,
-    outlineVariant = DarkOutlineVariant,
+    onBackground = DarkHighContrast,
+    surface = DarkBackground,
+    onSurface = DarkHighContrast,
+    surfaceVariant = DarkCardL1,
+    onSurfaceVariant = DarkSecondaryOnBg,
+    outline = DarkBorderL1,
+    outlineVariant = DarkBorderL2,
     scrim = DarkScrim,
-    inverseOnSurface = DarkInverseOnSurface
+    inverseOnSurface = DarkHighContrast,
+    inverseSurface = DarkHighContrast,
+    inversePrimary = DarkBackground
 )
 
 private val AmoledColors = darkColorScheme(
-    primary = AmoledPrimary,
-    onPrimary = AmoledOnPrimary,
-    primaryContainer = AmoledPrimaryContainer,
-    onPrimaryContainer = AmoledOnPrimaryContainer,
-    secondary = AmoledSecondary,
-    onSecondary = AmoledOnSecondary,
-    secondaryContainer = AmoledSecondaryContainer,
-    onSecondaryContainer = AmoledOnSecondaryContainer,
-    tertiary = AmoledTertiary,
-    onTertiary = AmoledOnTertiary,
-    tertiaryContainer = AmoledTertiaryContainer,
-    onTertiaryContainer = AmoledOnTertiaryContainer,
+    primary = AmoledHighContrast,
+    onPrimary = AmoledBackground,
+    primaryContainer = AmoledCardL2,
+    onPrimaryContainer = AmoledHighContrast,
+    secondary = AmoledSecondaryOnBg,
+    onSecondary = AmoledBackground,
+    secondaryContainer = AmoledCardL2,
+    onSecondaryContainer = AmoledHighContrast,
+    tertiary = AmoledSuccess,
+    onTertiary = AmoledOnSuccess,
+    tertiaryContainer = AmoledSuccessContainer,
+    onTertiaryContainer = AmoledOnSuccessContainer,
     error = AmoledError,
     onError = AmoledOnError,
     errorContainer = AmoledErrorContainer,
     onErrorContainer = AmoledOnErrorContainer,
     background = AmoledBackground,
-    onBackground = AmoledOnBackground,
-    surface = AmoledSurface,
-    onSurface = AmoledOnSurface,
-    surfaceVariant = AmoledSurfaceVariant,
-    onSurfaceVariant = AmoledOnSurfaceVariant,
-    outline = AmoledOutline,
-    outlineVariant = AmoledOutlineVariant,
+    onBackground = AmoledHighContrast,
+    surface = AmoledBackground,
+    onSurface = AmoledHighContrast,
+    surfaceVariant = AmoledCardL1,
+    onSurfaceVariant = AmoledSecondaryOnBg,
+    outline = AmoledBorderL1,
+    outlineVariant = AmoledBorderL2,
     scrim = AmoledScrim,
-    inverseOnSurface = AmoledInverseOnSurface
+    inverseOnSurface = AmoledHighContrast,
+    inverseSurface = AmoledHighContrast,
+    inversePrimary = AmoledBackground
 )
+
+// =========================================================================
+// Tema principal de OpenPlayer
+// =========================================================================
 
 /**
  * Tema principal de OpenPlayer.
@@ -254,8 +249,10 @@ private val AmoledColors = darkColorScheme(
  * [LocalAppFontFamily], que es provista por ThemeSwitcherHost según
  * el idioma activo (IBM Plex Sans o IBM Plex Sans Arabic).
  *
- * También provee los CompositionLocals de colores personalizados
- * para que los componentes accedan a colores semánticos según el tema.
+ * Provee CompositionLocals de colores semánticos (compatibles con
+ * nombres existentes + nuevos LocalCardL2Color y LocalActiveBorderColor)
+ * para que los componentes accedan a colores según el tema sin pasar
+ * parámetros.
  */
 @Composable
 fun OpenPlayerTheme(
@@ -268,94 +265,53 @@ fun OpenPlayerTheme(
         ThemeMode.AMOLED -> AmoledColors
     }
 
-    val floatingIconColor = when (themeMode) {
-        ThemeMode.LIGHT -> LightFloatingIcon
-        ThemeMode.DARK -> DarkFloatingIcon
-        ThemeMode.AMOLED -> AmoledFloatingIcon
+    // Tokens base por tema (única fuente de verdad)
+    val highContrast = when (themeMode) {
+        ThemeMode.LIGHT -> LightHighContrast
+        ThemeMode.DARK -> DarkHighContrast
+        ThemeMode.AMOLED -> AmoledHighContrast
     }
-
-    val navIconActiveColor = when (themeMode) {
-        ThemeMode.LIGHT -> LightNavIconActive
-        ThemeMode.DARK -> DarkNavIconActive
-        ThemeMode.AMOLED -> AmoledNavIconActive
+    val secondaryOnBg = when (themeMode) {
+        ThemeMode.LIGHT -> LightSecondaryOnBg
+        ThemeMode.DARK -> DarkSecondaryOnBg
+        ThemeMode.AMOLED -> AmoledSecondaryOnBg
     }
-
-    val navIconInactiveColor = when (themeMode) {
-        ThemeMode.LIGHT -> LightNavIconInactive
-        ThemeMode.DARK -> DarkNavIconInactive
-        ThemeMode.AMOLED -> AmoledNavIconInactive
+    val inactiveOnBg = when (themeMode) {
+        ThemeMode.LIGHT -> LightInactiveOnBg
+        ThemeMode.DARK -> DarkInactiveOnBg
+        ThemeMode.AMOLED -> AmoledInactiveOnBg
     }
-
-    val topBarIconColor = when (themeMode) {
-        ThemeMode.LIGHT -> LightTopBarIcon
-        ThemeMode.DARK -> DarkTopBarIcon
-        ThemeMode.AMOLED -> AmoledTopBarIcon
+    val cardL1 = when (themeMode) {
+        ThemeMode.LIGHT -> LightCardL1
+        ThemeMode.DARK -> DarkCardL1
+        ThemeMode.AMOLED -> AmoledCardL1
     }
-
-    val tracksCountTextColor = when (themeMode) {
-        ThemeMode.LIGHT -> LightTracksCountText
-        ThemeMode.DARK -> DarkTracksCountText
-        ThemeMode.AMOLED -> AmoledTracksCountText
-    }
-
-    val screenTitleColor = when (themeMode) {
-        ThemeMode.LIGHT -> LightTopBarIcon
-        ThemeMode.DARK -> DarkTopBarIcon
-        ThemeMode.AMOLED -> AmoledTopBarIcon
-    }
-
-    val listItemTitleColor = when (themeMode) {
-        ThemeMode.LIGHT -> LightTopBarIcon
-        ThemeMode.DARK -> DarkTopBarIcon
-        ThemeMode.AMOLED -> AmoledTopBarIcon
-    }
-
-    val listItemSubtitleColor = when (themeMode) {
-        ThemeMode.LIGHT -> LightTracksCountText
-        ThemeMode.DARK -> DarkTracksCountText
-        ThemeMode.AMOLED -> AmoledTracksCountText
-    }
-
-    val listItemMetaColor = when (themeMode) {
-        ThemeMode.LIGHT -> LightNavIconInactive
-        ThemeMode.DARK -> DarkNavIconInactive
-        ThemeMode.AMOLED -> AmoledNavIconInactive
-    }
-
-    val coverPlaceholderIconColor = when (themeMode) {
-        ThemeMode.LIGHT -> LightNavIconInactive
-        ThemeMode.DARK -> DarkNavIconInactive
-        ThemeMode.AMOLED -> AmoledNavIconInactive
-    }
-
-    val currentTrackColor = when (themeMode) {
-        ThemeMode.LIGHT -> LightCurrentTrackBackground
-        ThemeMode.DARK -> DarkCurrentTrackBackground
-        ThemeMode.AMOLED -> AmoledCurrentTrackBackground
-    }
-
-    val currentTrackBorderColor = when (themeMode) {
-        ThemeMode.LIGHT -> LightTopBarIcon
-        ThemeMode.DARK -> DarkTopBarIcon
-        ThemeMode.AMOLED -> AmoledTopBarIcon
+    val cardL2 = when (themeMode) {
+        ThemeMode.LIGHT -> LightCardL2
+        ThemeMode.DARK -> DarkCardL2
+        ThemeMode.AMOLED -> AmoledCardL2
     }
 
     // Construir tipografía usando la familia provista por LocalAppFontFamily
     val typography = buildTypography(LocalAppFontFamily.current)
 
     CompositionLocalProvider(
-        LocalFloatingIconColor provides floatingIconColor,
-        LocalNavIconActiveColor provides navIconActiveColor,
-        LocalNavIconInactiveColor provides navIconInactiveColor,
-        LocalTopBarIconColor provides topBarIconColor,
-        LocalTracksCountTextColor provides tracksCountTextColor,
-        LocalScreenTitleColor provides screenTitleColor,
-        LocalListItemTitleColor provides listItemTitleColor,
-        LocalListItemSubtitleColor provides listItemSubtitleColor,
-        LocalListItemMetaColor provides listItemMetaColor,
-        LocalCoverPlaceholderIconColor provides coverPlaceholderIconColor,
-        LocalCurrentTrackColor provides currentTrackColor,
-        LocalCurrentTrackBorderColor provides currentTrackBorderColor
+        // Locals existentes (apuntan a tokens nuevos sin romper consumidores)
+        LocalFloatingIconColor provides secondaryOnBg,
+        LocalNavIconActiveColor provides highContrast,
+        LocalNavIconInactiveColor provides inactiveOnBg,
+        LocalTopBarIconColor provides highContrast,
+        LocalTracksCountTextColor provides secondaryOnBg,
+        LocalScreenTitleColor provides highContrast,
+        LocalListItemTitleColor provides highContrast,
+        LocalListItemSubtitleColor provides secondaryOnBg,
+        LocalListItemMetaColor provides inactiveOnBg,
+        LocalCoverPlaceholderIconColor provides inactiveOnBg,
+        LocalCurrentTrackColor provides cardL1,
+        LocalCurrentTrackBorderColor provides highContrast,
+        // Locales nuevos
+        LocalCardL2Color provides cardL2,
+        LocalActiveBorderColor provides highContrast
     ) {
         MaterialTheme(
             colorScheme = colorScheme,

@@ -25,7 +25,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Outline
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.Shape
@@ -285,10 +284,10 @@ fun ThemeSwitcherHost(
  * - Los toques se ignoran mientras la animación está en curso (el
  *   usuario debe esperar a que termine antes de volver a tocar).
  *
- * Cada icono tiene un color específico según el tema:
- * - Sol (tema claro): #1A1A1A
- * - Luna (tema oscuro): #F5F5F5
- * - Luna AMOLED (tema AMOLED): #E5E5E5
+ * El color del icono es único en los 3 temas: MaterialTheme.colorScheme
+ * .onSurface (que se mapea al token highContrast del sistema de colores).
+ * Esto elimina la necesidad de colores específicos por tema
+ * (LightSunIconColor/DarkMoonIconColor/AmoledMoonIconColor eliminados).
  *
  * - [enabled]: controla si el botón responde a clicks. Útil cuando el
  *   botón está desvaneciéndose con el scroll y no debe ser interactuable
@@ -333,16 +332,19 @@ fun ThemeToggleButton(
             )
         }
     ) {
-        // Crossfade suave entre iconos según el tema mostrado, cada uno
-        // con su color específico.
+        // Color único en los 3 temas: onSurface = highContrast.
+        // Ya no hay colores específicos por tema para sol/luna.
+        val iconColor = MaterialTheme.colorScheme.onSurface
+
+        // Crossfade suave entre iconos según el tema mostrado.
         Crossfade(
             targetState = switchState.displayedTheme,
             animationSpec = tween(durationMillis = 200)
         ) { theme ->
-            val (iconRes, iconColor) = when (theme) {
-                ThemeMode.LIGHT -> R.drawable.ic_sun to LightSunIconColor
-                ThemeMode.DARK -> R.drawable.ic_moon to DarkMoonIconColor
-                ThemeMode.AMOLED -> R.drawable.ic_moon_amoled to AmoledMoonIconColor
+            val iconRes = when (theme) {
+                ThemeMode.LIGHT -> R.drawable.ic_sun
+                ThemeMode.DARK -> R.drawable.ic_moon
+                ThemeMode.AMOLED -> R.drawable.ic_moon_amoled
             }
 
             Icon(
