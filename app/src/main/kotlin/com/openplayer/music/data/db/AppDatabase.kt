@@ -10,6 +10,10 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 /**
  * Base de datos Room de OpenPlayer.
  *
+ * - version = 7: se agregó la tabla "play_stats" (estadísticas de
+ *   reproducción por canción: playCount, completedCount, playedMs,
+ *   lastPlayedAt). La migración 6→7 es REAL (no destructiva): las
+ *   estadísticas del usuario se preservan entre actualizaciones.
  * - version = 6: la tabla "artists" se reconstruyó para el pipeline
  *   Deezer (columnas name, deezerId, imageUrl, updatedAt). La
  *   migración 5→6 es QUIRÚRGICA: hace DROP+CREATE únicamente de
@@ -27,9 +31,9 @@ import androidx.sqlite.db.SupportSQLiteDatabase
  *   comment). El esquema se simplificó a los campos realmente usados.
  * - fallbackToDestructiveMigration(dropAllTables = true): ÚLTIMO
  *   recurso para migraciones destructivas no contempladas; NO debe
- *   aplicarse a las tablas de datos del usuario (playlists). Las
- *   migraciones 4→5 y 5→6 están registradas explícitamente y se
- *   ejecutan ANTES de cualquier fallback.
+ *   aplicarse a las tablas de datos del usuario (playlists, play_stats).
+ *   Las migraciones 4→5, 5→6 y 6→7 están registradas explícitamente y
+ *   se ejecutan ANTES de cualquier fallback.
  * - exportSchema = false: no se requiere directorio de exportación
  *   de esquemas para el uso actual del proyecto.
  * - Singleton thread-safe por proceso.
@@ -39,9 +43,10 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         SongEntity::class,
         ArtistEntity::class,
         PlaylistEntity::class,
-        PlaylistSongEntity::class
+        PlaylistSongEntity::class,
+        PlayStatsEntity::class
     ],
-    version = 6,
+    version = 7,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -51,6 +56,8 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun artistDao(): ArtistDao
 
     abstract fun playlistDao(): PlaylistDao
+
+    abstract fun playStatsDao(): PlayStatsDao
 
     companion object {
         private const val DATABASE_NAME = "openplayer.db"
@@ -65,7 +72,7 @@ abstract class AppDatabase : RoomDatabase() {
 
         private fun buildDatabase(context: Context): AppDatabase =
             Room.databaseBuilder(context, AppDatabase::class.java, DATABASE_NAME)
-                .addMigrations(MIGRATION_4_5, MIGRATION_5_6)
+                .addMigrations(MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7)
                 .fallbackToDestructiveMigration(dropAllTables = true)
                 .build()
 
@@ -150,6 +157,43 @@ abstract class AppDatabase : RoomDatabase() {
                         `updatedAt` INTEGER NOT NULL,
                         PRIMARY KEY(`name`)
                     )
+                    """.trimIndent()
+                )
+            }
+        }
+
+        /**
+         * Migración 6→7: crea la tabla "play_stats" (estadísticas de
+         * reproducción por canción).
+         *
+         * Es NO DESTRUCTIVA: las tablas "songs", "artists", "playlists"
+         * y "playlist_songs" no se tocan; solo se añade la nueva. Las
+         * estadísticas del usuario se preservan entre versiones de la app.
+         *
+         * La FK hacia "songs" con CASCADE on delete garantiza que si
+         * una canción se elimina de la biblioteca, sus estadísticas se
+         * borran automáticamente (consistencia sin referencias rotas).
+         */
+        private val MIGRATION_6_7 = object : Migration(6, 7) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `play_stats` (
+                        `songId` INTEGER NOT NULL,
+                        `playCount` INTEGER NOT NULL,
+                        `completedCount` INTEGER NOT NULL,
+                        `playedMs` INTEGER NOT NULL,
+                        `lastPlayedAt` INTEGER NOT NULL,
+                        PRIMARY KEY(`songId`),
+                        FOREIGN KEY(`songId`) REFERENCES `songs`(`id`)
+                            ON UPDATE NO ACTION ON DELETE CASCADE
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL(
+                    """
+                    CREATE INDEX IF NOT EXISTS `index_play_stats_lastPlayedAt`
+                    ON `play_stats` (`lastPlayedAt`)
                     """.trimIndent()
                 )
             }

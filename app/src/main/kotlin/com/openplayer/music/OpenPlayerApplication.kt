@@ -6,6 +6,7 @@ import com.openplayer.music.data.db.AppDatabase
 import com.openplayer.music.data.media.ArtistImageRepository
 import com.openplayer.music.data.media.AudioRepository
 import com.openplayer.music.data.media.CoverRepository
+import com.openplayer.music.data.media.PlaybackHistoryRepository
 import com.openplayer.music.data.media.PlaylistRepository
 
 /**
@@ -18,7 +19,8 @@ import com.openplayer.music.data.media.PlaylistRepository
  *
  * Esto es especialmente importante para PlaybackService, que necesita
  * acceso a AudioRepository para mantener la playlist sincronizada con
- * la biblioteca musical.
+ * la biblioteca musical, y a PlaybackHistoryRepository para registrar
+ * eventos de reproducción.
  *
  * ## Optimización: CoverRepository singleton
  * Expone [coverRepository] como singleton para que la UI (TracksScreen)
@@ -36,6 +38,12 @@ import com.openplayer.music.data.media.PlaylistRepository
  * Expone [playlistRepository] como singleton para que cualquier
  * pantalla (PlaylistScreen, diálogos de añadir a playlist, etc.)
  * comparta el mismo acceso a las playlists del usuario y al mismo
+ * Flow reactivo.
+ *
+ * ## PlaybackHistoryRepository singleton
+ * Expone [playbackHistoryRepository] como singleton para que
+ * PlaybackService (registro de eventos) y HomeScreen (lectura de
+ * estadísticas) compartan el mismo acceso a play_stats y al mismo
  * Flow reactivo.
  */
 class OpenPlayerApplication : Application() {
@@ -78,5 +86,15 @@ class OpenPlayerApplication : Application() {
      */
     val playlistRepository: PlaylistRepository by lazy {
         PlaylistRepository(appDatabase)
+    }
+
+    /**
+     * Singleton de [PlaybackHistoryRepository]: registro de eventos
+     * de reproducción (playCount, completedCount, playedMs) y Flow
+     * reactivo de estadísticas agregadas, top artista/pista y
+     * canciones recientes.
+     */
+    val playbackHistoryRepository: PlaybackHistoryRepository by lazy {
+        PlaybackHistoryRepository(appDatabase)
     }
 }

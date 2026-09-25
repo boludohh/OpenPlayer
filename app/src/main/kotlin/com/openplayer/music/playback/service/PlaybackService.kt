@@ -18,6 +18,7 @@ import androidx.media3.session.MediaSession
 import com.openplayer.music.MainActivity
 import com.openplayer.music.OpenPlayerApplication
 import com.openplayer.music.data.media.CoverRepository
+import com.openplayer.music.data.media.PlaybackHistoryRepository
 import com.openplayer.music.playback.engine.BassPlayerAdapter
 import com.openplayer.music.playback.toMediaItem
 import kotlinx.coroutines.CoroutineScope
@@ -51,6 +52,10 @@ import kotlinx.coroutines.withContext
  * - **Sincronización reactiva de playlist**: se suscribe al Flow de
  *   canciones de AudioRepository y actualiza automáticamente la cola
  *   cuando cambian los datos, sin interrumpir la reproducción en curso.
+ * - **Registro de historial de reproducción**: engancha eventos del
+ *   player (inicio, pausa, seek, cambio de canción, fin natural) a
+ *   [PlaybackHistoryRepository] para trackear playCount, completedCount
+ *   y playedMs.
  *
  * ## Optimizaciones de rendimiento
  * - El mapeo de canciones a MediaItems se ejecuta en `Dispatchers.IO`
@@ -88,6 +93,14 @@ class PlaybackService : MediaLibraryService() {
      */
     private val coverRepository: CoverRepository
         get() = (application as OpenPlayerApplication).coverRepository
+
+    /**
+     * Repositorio de historial de reproducción.
+     * Reutiliza el singleton de la Application para compartir el acceso
+     * a play_stats con HomeScreen y otros consumidores.
+     */
+    private val playbackHistoryRepository: PlaybackHistoryRepository
+        get() = (application as OpenPlayerApplication).playbackHistoryRepository
 
     // =========================================================================
     // Audio focus para BASS
@@ -134,12 +147,66 @@ class PlaybackService : MediaLibraryService() {
     private var noisyReceiverRegistered = false
 
     // =========================================================================
-    // Listener del player (audio focus)
+    // Listener del player (audio focus + historial de reproducción)
     // =========================================================================
 
     private val playerListener = object : Player.Listener {
         override fun onIsPlayingChanged(isPlaying: Boolean) {
-            if (isPlaying) requestBassFocus() else abandonBassFocus()
+            if (isPlaying) {
+                requestBassFocus()
+            } else {
+                abandonBassFocus()
+                // Al pausar, flush de la sesión actual (acumular playedMs)
+                player?.let { p ->
+                    val currentPosition = p.currentPosition
+                    val mediaId = p.currentMediaItem?.mediaId?.toLongOrNull()
+                    if (mediaId != null) {
+                        serviceScope.launch {
+                            playbackHistoryRepository.flushSession(currentPosition)
+                        }
+                    }
+                }
+            }
+        }
+
+        override fun onMediaItemTransition(mediaItem: androidx.media3.common.MediaItem?, reason: Int) {
+            // Al cambiar de canción: flush sesión anterior + inicio de nueva
+            player?.let { p ->
+                val previousPosition = p.currentPosition
+                val previousMediaId = mediaItem?.mediaId?.toLongOrNull()
+                
+                // Flush sesión anterior (si había una)
+                if (previousMediaId != null) {
+                    serviceScope.launch {
+                        playbackHistoryRepository.flushSession(previousPosition)
+                    }
+                }
+
+                // Inicio de nueva sesión (si hay nueva canción)
+                val newMediaId = mediaItem?.mediaId?.toLongOrNull()
+                if (newMediaId != null) {
+                    serviceScope.launch {
+                        playbackHistoryRepository.recordPlayStart(newMediaId, 0L)
+                    }
+                }
+            }
+        }
+
+        override fun onPlaybackStateChanged(playbackState: Int) {
+            // STATE_ENDED: canción terminó completamente
+            if (playbackState == Player.STATE_ENDED) {
+                player?.let { p ->
+                    val currentPosition = p.currentPosition
+                    val mediaId = p.currentMediaItem?.mediaId?.toLongOrNull()
+                    if (mediaId != null) {
+                        serviceScope.launch {
+                            // Flush final + completedCount +1
+                            playbackHistoryRepository.flushSession(currentPosition)
+                            playbackHistoryRepository.recordCompleted(mediaId)
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -222,7 +289,7 @@ class PlaybackService : MediaLibraryService() {
      * El adapter ([BassPlayerAdapter]) se encarga internamente de:
      - Reemplazar completamente la playlist si el queueId actual es
      *   QUEUE_LIBRARY (cola global de biblioteca).
-     * - Hacer merge reactivo si el queueId es personalizado (ej.
+     - Hacer merge reactivo si el queueId es personalizado (ej.
      *   QUEUE_TRACKS_BY_DATE): actualiza metadatos, elimina borrados,
      *   conserva el orden, sin interrumpir la reproducción actual.
      *
