@@ -1,7 +1,5 @@
 package com.openplayer.music.ui.screens.tracks
 
-import android.content.ComponentName
-import android.util.Log
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -13,15 +11,10 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
@@ -33,27 +26,14 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.core.content.ContextCompat
-import androidx.media3.common.MediaItem
-import androidx.media3.common.Player
-import androidx.media3.session.MediaController
-import androidx.media3.session.SessionToken
 import com.openplayer.music.OpenPlayerApplication
 import com.openplayer.music.R
 import com.openplayer.music.data.media.AudioRepository
-import com.openplayer.music.data.model.Song
 import com.openplayer.music.playback.engine.BassPlayerAdapter
-import com.openplayer.music.playback.service.PlaybackService
-import com.openplayer.music.playback.toMediaItem
 import com.openplayer.music.ui.screens.tracks.components.TrackRow
 import com.openplayer.music.ui.theme.LocalScreenTitleColor
 import com.openplayer.music.ui.theme.LocalTracksCountTextColor
 import com.openplayer.music.ui.theme.screenTitle
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-
-private const val DEBUG_TAG = "QueueDebug"
 
 /**
  * Altura del desvanecido superior en dp.
@@ -77,22 +57,16 @@ private val ScrollFadeThreshold = 48.dp
  *
  * Muestra la lista completa de canciones escaneadas ordenadas por fecha
  * de agregada descendente (las más recientes primero). Al tocar una
- * canción inicia la reproducción vía MediaController conectado al
- * PlaybackService, buscando por mediaId para garantizar sincronización
- * correcta con cualquier orden de lista.
- *
- * La primera vez que se reproduce desde esta pantalla, se carga la cola
- * con queueId "tracksByDate" para que el orden de reproducción respete
- * el orden visual (por fecha descendente).
+ * canción inicia la reproducción vía [PlaybackController] conectado al
+ * PlaybackService, construyendo la cola con queueId QUEUE_TRACKS_BY_DATE
+ * para que el orden de reproducción respete el orden visual.
  *
  * **Indicador de pista actual**: cada [TrackRow] recibe un booleano
  * [TrackRow.isCurrentTrack] que indica si esa canción es la que está
  * sonando ahora en el reproductor. El indicador se actualiza en tiempo
- * real mediante un [Player.Listener] registrado en el MediaController,
- * escuchando cambios de pista (transiciones automáticas, seeks, taps
- * en otras filas, controles externos). Tocar repetidamente la misma
- * pista no causa parpadeo porque el indicador depende del estado del
- * reproductor, no del tap del usuario.
+ * real mediante el Flow `currentMediaId` de [PlaybackController],
+ * respondiendo a cambios de pista desde cualquier fuente (taps en otras
+ * filas, transiciones automáticas, controles externos).
  *
  * **Efecto fade superior condicional**: se dibuja un gradiente vertical
  * en el tope del área de scroll (de color de fondo opaco a transparente
@@ -133,11 +107,14 @@ fun TracksScreen(
 ) {
     val context = LocalContext.current
     val songs by audioRepository.songs.collectAsState(initial = emptyList())
-    val coroutineScope = rememberCoroutineScope()
     // Singleton de CoverRepository desde la Application: comparte caché
     // de memoria con PlaybackService y evita duplicados.
     val coverRepository = remember {
         (context.applicationContext as OpenPlayerApplication).coverRepository
+    }
+    // Singleton de PlaybackController desde la Application
+    val playbackController = remember {
+        (context.applicationContext as OpenPlayerApplication).playbackController
     }
     val screenTitleColor = LocalScreenTitleColor.current
     val tracksCountTextColor = LocalTracksCountTextColor.current
@@ -177,81 +154,8 @@ fun TracksScreen(
         songs.sortedByDescending { it.dateAdded }
     }
 
-    // MediaController conectado al PlaybackService
-    var controller by remember { mutableStateOf<MediaController?>(null) }
-
-    // mediaId de la pista actualmente en reproducción (null si no hay nada sonando).
-    // Se actualiza reactivamente vía Player.Listener, respondiendo a:
-    // - Taps del usuario en otras filas de la lista
-    // - Transiciones automáticas (fin de pista → siguiente)
-    // - Cambios externos (notificación, Bluetooth, Android Auto)
-    // - Seek a otra pista desde cualquier fuente
-    var currentPlayingMediaId by remember { mutableStateOf<String?>(null) }
-
-    DisposableEffect(Unit) {
-        val token = SessionToken(
-            context,
-            ComponentName(context, PlaybackService::class.java)
-        )
-        val future = MediaController.Builder(context, token).buildAsync()
-        future.addListener({
-            if (future.isDone && !future.isCancelled) {
-                controller = runCatching { future.get() }.getOrNull()
-            }
-        }, ContextCompat.getMainExecutor(context))
-        onDispose {
-            controller?.release()
-            controller = null
-        }
-    }
-
-    // Listener del MediaController: sigue la pista actual en tiempo real.
-    // Se registra cuando el controller está disponible y se remueve al
-    // descomponer el efecto. Escucha:
-    // - onMediaItemTransition: cambio de pista (automático o manual)
-    // - onPlaybackStateChanged: por si el estado cambia sin transición
-    // Al conectar, también inicializa el estado con la pista actual.
-    DisposableEffect(controller) {
-        val ctrl = controller
-        if (ctrl != null) {
-            // Inicializar con la pista que está sonando al conectar
-            currentPlayingMediaId = ctrl.currentMediaItem?.mediaId
-
-            val listener = object : Player.Listener {
-                override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
-                    currentPlayingMediaId = mediaItem?.mediaId
-                    Log.d(DEBUG_TAG, "TracksScreen: media item transition | newMediaId=${mediaItem?.mediaId} | reason=$reason")
-                }
-
-                override fun onPlaybackStateChanged(playbackState: Int) {
-                    // Si el reproductor se detiene completamente (IDLE),
-                    // limpiamos el indicador
-                    if (playbackState == Player.STATE_IDLE) {
-                        currentPlayingMediaId = null
-                    }
-                }
-            }
-
-            ctrl.addListener(listener)
-
-            onDispose {
-                ctrl.removeListener(listener)
-            }
-        } else {
-            onDispose { }
-        }
-    }
-
-    // Lista de MediaItems construida como fallback para primera reproducción
-    var mediaItems by remember { mutableStateOf<List<androidx.media3.common.MediaItem>>(emptyList()) }
-
-    LaunchedEffect(sortedSongs) {
-        if (sortedSongs.isNotEmpty()) {
-            mediaItems = withContext(Dispatchers.IO) {
-                sortedSongs.map { it.toMediaItem(coverRepository) }
-            }
-        }
-    }
+    // Flow reactivo del controller: mediaId de la pista actualmente en reproducción
+    val currentPlayingMediaId by playbackController.currentMediaId.collectAsState()
 
     Column(
         modifier = modifier
@@ -347,39 +251,11 @@ fun TracksScreen(
                     coverFile = coverFile,
                     isCurrentTrack = isCurrentTrack,
                     onClick = {
-                        val current = controller ?: return@TrackRow
-                        val targetMediaId = song.id.toString()
-
-                        Log.d(DEBUG_TAG, "TracksScreen: user tapped song | mediaId=$targetMediaId | title=${song.title}")
-
-                        coroutineScope.launch {
-                            if (mediaItems.isNotEmpty()) {
-                                // Encontrar el índice de la canción en la lista ordenada por fecha
-                                val startIndex = mediaItems.indexOfFirst { it.mediaId == targetMediaId }
-                                    .coerceAtLeast(0)
-
-                                Log.d(DEBUG_TAG, "TracksScreen: loading queue with queueId=${BassPlayerAdapter.QUEUE_TRACKS_BY_DATE} | startIndex=$startIndex | totalItems=${mediaItems.size}")
-
-                                // Agregar queueId al tag del primer MediaItem
-                                val taggedMediaItems = mediaItems.mapIndexed { i, item ->
-                                    if (i == 0) {
-                                        androidx.media3.common.MediaItem.Builder()
-                                            .setMediaId(item.mediaId)
-                                            .setUri(item.localConfiguration?.uri)
-                                            .setMediaMetadata(item.mediaMetadata)
-                                            .setTag(BassPlayerAdapter.QUEUE_TRACKS_BY_DATE)
-                                            .build()
-                                    } else {
-                                        item
-                                    }
-                                }
-
-                                // Reemplazar la cola del controller con la cola ordenada por fecha
-                                current.setMediaItems(taggedMediaItems, startIndex, 0L)
-                                current.prepare()
-                                current.play()
-                            }
-                        }
+                        playbackController.playSong(
+                            song = song,
+                            queueId = BassPlayerAdapter.QUEUE_TRACKS_BY_DATE,
+                            queueSongs = sortedSongs
+                        )
                     },
                     onMoreClick = {
                         // TODO: futuro menú de opciones de la pista

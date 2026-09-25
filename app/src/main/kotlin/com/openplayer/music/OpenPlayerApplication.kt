@@ -8,6 +8,7 @@ import com.openplayer.music.data.media.AudioRepository
 import com.openplayer.music.data.media.CoverRepository
 import com.openplayer.music.data.media.PlaybackHistoryRepository
 import com.openplayer.music.data.media.PlaylistRepository
+import com.openplayer.music.playback.PlaybackController
 
 /**
  * Application class personalizada de OpenPlayer.
@@ -45,6 +46,13 @@ import com.openplayer.music.data.media.PlaylistRepository
  * PlaybackService (registro de eventos) y HomeScreen (lectura de
  * estadísticas) compartan el mismo acceso a play_stats y al mismo
  * Flow reactivo.
+ *
+ * ## PlaybackController singleton
+ * Expone [playbackController] como singleton para que todas las
+ * pantallas (TracksScreen, SearchScreen, HomeScreen, futuras)
+ * compartan el mismo MediaController conectado a PlaybackService.
+ * Evita duplicación de conexiones y garantiza que los Flows reactivos
+ * (currentMediaId, isPlaying, etc.) sean consistentes en toda la app.
  */
 class OpenPlayerApplication : Application() {
 
@@ -96,5 +104,20 @@ class OpenPlayerApplication : Application() {
      */
     val playbackHistoryRepository: PlaybackHistoryRepository by lazy {
         PlaybackHistoryRepository(appDatabase)
+    }
+
+    /**
+     * Singleton de [PlaybackController]: controller centralizado de
+     * reproducción compartido por todas las pantallas. Gestiona la
+     * conexión única a PlaybackService y expone Flows reactivos para
+     * el indicador de pista actual y futuros mini players.
+     */
+    val playbackController: PlaybackController by lazy {
+        PlaybackController(applicationContext, coverRepository)
+    }
+
+    override fun onTerminate() {
+        super.onTerminate()
+        playbackController.release()
     }
 }

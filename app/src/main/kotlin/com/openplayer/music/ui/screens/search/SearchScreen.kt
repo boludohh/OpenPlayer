@@ -28,6 +28,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.openplayer.music.OpenPlayerApplication
 import com.openplayer.music.R
+import com.openplayer.music.playback.engine.BassPlayerAdapter
 import com.openplayer.music.ui.screens.playlist.PlaylistRow
 import com.openplayer.music.ui.screens.tracks.components.TrackRow
 import com.openplayer.music.ui.theme.LocalListItemTitleColor
@@ -47,35 +48,29 @@ private const val SEARCH_DEBOUNCE_MS = 300L
  * Permite buscar canciones (por título, artista o álbum) y playlists
  * (por nombre) en tiempo real con debounce de 300ms.
  *
- * **Cascarón técnico funcional**: toda la lógica interna está
- * implementada (queries reactivos, debounce, reutilización de
- * componentes TrackRow y PlaylistRow), pero la pantalla aún no se
- * muestra en ningún lado. La integración con el botón de búsqueda
- * existente en TopActionBar se realizará en la fase de UI pulida.
- *
  * ## Comportamiento
  * - Campo de texto con debounce de 300ms: la búsqueda se ejecuta
  *   300ms después de que el usuario deja de escribir.
  * - Dos secciones de resultados:
  *   - **Canciones**: reutiliza [TrackRow] (mismo componente que
- *     TracksScreen). Callbacks de reproducción vacíos por ahora.
+ *     TracksScreen). Al tocar una canción, se reproduce en la cola
+ *     QUEUE_SEARCH (resultados de búsqueda en orden alfabético).
  *   - **Playlists**: reutiliza [PlaylistRow] (mismo componente que
- *     PlaylistScreen).
+ *     PlaylistScreen). Callbacks de navegación vacíos por ahora.
  * - Estado vacío cuando no hay resultados o cuando el campo está
  *   vacío (mensaje diferente en cada caso).
  * - Los resultados son reactivos: si la biblioteca cambia mientras
  *   el usuario está en esta pantalla, los resultados se actualizan
  *   automáticamente.
  *
- * ## Próximamente (fase de UI pulida)
- * - Integración con el botón de búsqueda en TopActionBar.
- * - Callbacks de reproducción funcionales en TrackRow.
- * - Navegación a detalle de playlist al tocar PlaylistRow.
- * - Botón de cierre (X) para volver a la pantalla anterior.
+ * ## Indicador de pista actual
+ * Cada [TrackRow] recibe `isCurrentTrack` conectado al Flow
+ * `currentMediaId` de [PlaybackController], por lo que el indicador
+ * se actualiza en tiempo real incluso si la reproducción se inició
+ * desde otra pantalla.
  *
  * @param onClose Callback invocado cuando el usuario cierra la
- *                pantalla de búsqueda. Preparado para integración
- *                futura con TopActionBar.
+ *                pantalla de búsqueda.
  * @param modifier Modificador de Compose opcional.
  */
 @Composable
@@ -98,6 +93,13 @@ fun SearchScreen(
     val coverRepository = remember {
         (context.applicationContext as OpenPlayerApplication).coverRepository
     }
+    // Singleton de PlaybackController desde la Application
+    val playbackController = remember {
+        (context.applicationContext as OpenPlayerApplication).playbackController
+    }
+
+    // Flow reactivo del controller: mediaId de la pista actualmente en reproducción
+    val currentPlayingMediaId by playbackController.currentMediaId.collectAsState()
 
     // Estado del campo de búsqueda
     var query by remember { mutableStateOf("") }
@@ -181,11 +183,20 @@ fun SearchScreen(
                         key = { "song-${it.id}" }
                     ) { song ->
                         val coverFile = coverRepository.coverFile(song.path)
+                        // ¿Esta canción es la que está sonando ahora?
+                        val isCurrentTrack = song.id.toString() == currentPlayingMediaId
+
                         TrackRow(
                             song = song,
                             coverFile = coverFile,
-                            isCurrentTrack = false,
-                            onClick = { /* TODO: reproducir canción */ },
+                            isCurrentTrack = isCurrentTrack,
+                            onClick = {
+                                playbackController.playSong(
+                                    song = song,
+                                    queueId = BassPlayerAdapter.QUEUE_SEARCH,
+                                    queueSongs = songs
+                                )
+                            },
                             onMoreClick = { /* TODO: menú contextual */ }
                         )
                     }

@@ -38,6 +38,7 @@ import com.openplayer.music.data.db.TotalStats
 import com.openplayer.music.data.model.Song
 import com.openplayer.music.data.media.AudioRepository
 import com.openplayer.music.data.media.PlaybackHistoryRepository
+import com.openplayer.music.playback.engine.BassPlayerAdapter
 import com.openplayer.music.ui.screens.albums.components.AlbumCard
 import com.openplayer.music.ui.screens.tracks.components.TrackRow
 import com.openplayer.music.ui.theme.LocalListItemSubtitleColor
@@ -53,7 +54,9 @@ import java.util.Calendar
  * - **Estadísticas agregadas**: reproducciones totales, completadas,
  *   tiempo total escuchado.
  * - **Top artista y pista** más reproducidos.
- * - **Reproducciones recientes**: últimas 5 canciones.
+ * - **Reproducciones recientes**: últimas 5 canciones. Al tocar una
+ *   canción, se reproduce en la cola QUEUE_RECENTLY_PLAYED (orden
+ *   de más reciente a más antigua).
  * - **Álbumes recientes**: últimos 6 álbumes por fecha de agregado.
  *
  * ## Saludo según hora del día
@@ -68,6 +71,12 @@ import java.util.Calendar
  * Si en el futuro se muestran horas visibles al usuario, se usará
  * `DateFormat.is24HourFormat(context)` para respetar la preferencia
  * del sistema. La lógica del saludo NO depende del formato de hora.
+ *
+ * ## Indicador de pista actual
+ * Cada [TrackRow] en la sección de recientes recibe `isCurrentTrack`
+ * conectado al Flow `currentMediaId` de [PlaybackController], por lo
+ * que el indicador se actualiza en tiempo real incluso si la reproducción
+ * se inició desde otra pantalla.
  *
  * ## Atribución de Deezer
  * La atribución exigida por los términos de uso de Deezer se mantiene
@@ -93,6 +102,13 @@ fun HomeScreen(
     val coverRepository = remember {
         (context.applicationContext as OpenPlayerApplication).coverRepository
     }
+    // Singleton de PlaybackController desde la Application
+    val playbackController = remember {
+        (context.applicationContext as OpenPlayerApplication).playbackController
+    }
+
+    // Flow reactivo del controller: mediaId de la pista actualmente en reproducción
+    val currentPlayingMediaId by playbackController.currentMediaId.collectAsState()
 
     // Flows reactivos del repositorio de historial
     val totalStats by playbackHistoryRepository.totalStats.collectAsState(
@@ -213,11 +229,20 @@ fun HomeScreen(
                     key = { "recent-${it.id}" }
                 ) { song ->
                     val coverFile = coverRepository.coverFile(song.path)
+                    // ¿Esta canción es la que está sonando ahora?
+                    val isCurrentTrack = song.id.toString() == currentPlayingMediaId
+
                     TrackRow(
                         song = song,
                         coverFile = coverFile,
-                        isCurrentTrack = false,
-                        onClick = { /* TODO: reproducir canción */ },
+                        isCurrentTrack = isCurrentTrack,
+                        onClick = {
+                            playbackController.playSong(
+                                song = song,
+                                queueId = BassPlayerAdapter.QUEUE_RECENTLY_PLAYED,
+                                queueSongs = recentlyPlayed
+                            )
+                        },
                         onMoreClick = { /* TODO: menú contextual */ }
                     )
                 }
