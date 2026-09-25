@@ -18,8 +18,7 @@ import com.openplayer.music.ui.theme.LocalTopBarIconColor
  * Barra de acción superior de OpenPlayer.
  *
  * Contiene dos iconos de acción (menú y búsqueda) posicionados en los
- * extremos de la pantalla principal. Los iconos son actualmente solo
- * visuales, sin funcionalidad asociada.
+ * extremos de la pantalla principal.
  *
  * Especificaciones:
  * - Dos iconos de 26dp de tamaño con área de toque de 44dp (padding 9dp)
@@ -32,11 +31,17 @@ import com.openplayer.music.ui.theme.LocalTopBarIconColor
  *   de 26dp, dejando 9dp de margen óptico superior (glifo en 9–35dp
  *   relativos al inicio del contenido bajo la barra de estado).
  *
+ * @param onSearchClick Callback invocado al tocar el icono de búsqueda.
+ *                      La lógica de apertura de la pantalla de búsqueda
+ *                      vive en el contenedor padre (MainScreen).
  * @param modifier Modificador externo que aplica el posicionamiento
  *                 desde el contenedor padre.
  */
 @Composable
-fun TopActionBar(modifier: Modifier = Modifier) {
+fun TopActionBar(
+    onSearchClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
     val iconColor = LocalTopBarIconColor.current
 
     Row(
@@ -60,7 +65,7 @@ fun TopActionBar(modifier: Modifier = Modifier) {
 
         // Icono de búsqueda (lupa) - 15dp del margen derecho
         IconButton(
-            onClick = { /* TODO: Implementar funcionalidad */ },
+            onClick = onSearchClick,
             modifier = Modifier.size(44.dp)
         ) {
             Icon(

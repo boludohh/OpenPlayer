@@ -28,6 +28,7 @@ import com.openplayer.music.ui.screens.albums.AlbumsScreen
 import com.openplayer.music.ui.screens.artists.ArtistsScreen
 import com.openplayer.music.ui.screens.home.HomeScreen
 import com.openplayer.music.ui.screens.playlist.PlaylistScreen
+import com.openplayer.music.ui.screens.search.SearchScreen
 import com.openplayer.music.ui.screens.tracks.TracksScreen
 
 /**
@@ -55,12 +56,22 @@ import com.openplayer.music.ui.screens.tracks.TracksScreen
  *   posiciona su primer elemento por debajo de dicha franja.
  * - StatusBarsPadding aplicado al contenedor raíz para que el contenido no
  *   quede detrás de la barra de estado del sistema.
+ *
+ * ## Overlay de búsqueda
+ * Cuando el usuario toca el icono de búsqueda en [TopActionBar], se
+ * establece [isSearchOpen] en true y [SearchScreen] se renderiza como
+ * overlay encima del contenido de pestañas (z-ordering con Box). Al
+ * cerrar la búsqueda, el usuario vuelve exactamente a la pestaña donde
+ * estaba, preservando el estado de scroll y selección.
  */
 @Composable
 fun MainScreen(audioRepository: AudioRepository) {
     val context = LocalContext.current
     // Estado de navegación compartido con el panel inferior
     var selectedTab by remember { mutableStateOf(NavTab.HOME) }
+    
+    // Estado del overlay de búsqueda
+    var isSearchOpen by remember { mutableStateOf(false) }
 
     // Singleton de PlaylistRepository desde la Application: compartido
     // por toda la app y pasado como parámetro a la pantalla de listas.
@@ -110,6 +121,7 @@ fun MainScreen(audioRepository: AudioRepository) {
 
         // Barra de acción superior con iconos de menú y búsqueda
         TopActionBar(
+            onSearchClick = { isSearchOpen = true },
             modifier = Modifier.align(Alignment.TopStart)
         )
 
@@ -119,6 +131,16 @@ fun MainScreen(audioRepository: AudioRepository) {
             onTabSelected = { selectedTab = it },
             modifier = Modifier.align(Alignment.BottomCenter)
         )
+
+        // Overlay de búsqueda: se renderiza ENCIMA de todo el contenido
+        // (z-ordering de Box: último hijo = capa superior). Cuando se
+        // cierra, el usuario vuelve exactamente a la pestaña donde estaba.
+        if (isSearchOpen) {
+            SearchScreen(
+                onClose = { isSearchOpen = false },
+                modifier = Modifier.fillMaxSize()
+            )
+        }
     }
 }
 
