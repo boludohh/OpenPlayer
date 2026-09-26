@@ -57,7 +57,13 @@ object FileDescriptorHelper {
             // Cerramos el descriptor crudo manualmente para evitar fugas
             if (fd >= 0) {
                 try {
-                    Os.close(fd)
+                    // Crear un FileDescriptor usando reflection para poder cerrarlo con Os.close()
+                    // Esto es necesario porque Os.close() espera un FileDescriptor, no un Int
+                    val fileDescriptor = java.io.FileDescriptor()
+                    val field = java.io.FileDescriptor::class.java.getDeclaredField("fd")
+                    field.isAccessible = true
+                    field.setInt(fileDescriptor, fd)
+                    Os.close(fileDescriptor)
                 } catch (e: Exception) {
                     Log.w(LOG_TAG, "Error cerrando fd para $path: ${e.message}")
                 }
