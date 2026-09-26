@@ -23,8 +23,8 @@ android {
         applicationId = "com.openplayer.music"
         minSdk = 27
         targetSdk = 37
-        versionCode = 83
-        versionName = "0.35.2"
+        versionCode = 84
+        versionName = "0.36.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -68,8 +68,6 @@ android {
 
     buildFeatures {
         compose = true
-        // BuildConfig generado para uso interno (VERSION_NAME, etc.).
-        // Ya no se inyectan claves de API: Deezer no requiere credenciales.
         buildConfig = true
     }
 
@@ -78,11 +76,8 @@ android {
         targetCompatibility = JavaVersion.VERSION_21
     }
 
-    // Configuración de sourceSets para incluir los binarios nativos en el APK
     sourceSets {
         getByName("main") {
-            // Directorio de librerías nativas precompiladas:
-            // - bass/: libbass.so, libbassmix.so, libbassflac.so, libbassopus.so, libbass_aac.so
             jniLibs.directories += "src/main/cpp/bass"
         }
     }
@@ -106,19 +101,12 @@ dependencies {
     implementation(libs.androidx.ui.tooling.preview)
     implementation(libs.androidx.material3)
     implementation(libs.androidx.datastore.preferences)
-    implementation(libs.androidx.room.runtime)
-    implementation(libs.androidx.room.ktx)
-    ksp(libs.androidx.room.compiler)
-
-    // Media3 MediaSession (notificación, controles, Bluetooth, Android Auto)
+    implementation(libs.androidx.room3.runtime)
+    ksp(libs.androidx.room3.compiler)
+    implementation(libs.androidx.sqlite.bundled)
     implementation(libs.media3.session)
-
-    // Coil 3: carga de imágenes para carátulas de pistas (y futuro uso web)
     implementation(libs.coil.compose)
     implementation(libs.coil.network.okhttp)
-
-    // KTagLib: Kotlin bindings para TagLib 2.3.2 (lectura/escritura de metadatos)
-    // Licencia: Apache-2.0 (compatible con GPL-3.0)
     implementation(libs.ktaglib)
 
     debugImplementation(libs.androidx.ui.tooling)

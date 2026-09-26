@@ -1,7 +1,7 @@
 package com.openplayer.music.data.db
 
-import androidx.room.Entity
-import androidx.room.PrimaryKey
+import androidx.room3.Entity
+import androidx.room3.PrimaryKey
 
 /**
  * Entidad de Room para la tabla "artists".

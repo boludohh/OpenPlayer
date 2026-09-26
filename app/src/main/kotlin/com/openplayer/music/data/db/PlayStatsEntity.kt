@@ -1,9 +1,9 @@
 package com.openplayer.music.data.db
 
-import androidx.room.Entity
-import androidx.room.ForeignKey
-import androidx.room.Index
-import androidx.room.PrimaryKey
+import androidx.room3.Entity
+import androidx.room3.ForeignKey
+import androidx.room3.Index
+import androidx.room3.PrimaryKey
 
 /**
  * Entidad Room para la tabla "play_stats".
@@ -16,8 +16,8 @@ import androidx.room.PrimaryKey
  * ## Datos de actividad del usuario
  * A diferencia de "songs" y "artists" (cachés reconstruibles), esta
  * tabla contiene DATOS DEL USUARIO (su historial de actividad). La
- * migración 6→7 es REAL (no destructiva): las estadísticas se
- * preservan entre versiones de la app.
+ * migración 6→7 de AppDatabase preserva esta tabla entre versiones
+ * de la app.
  *
  * ## Semántica de campos
  * - [songId]: FK hacia "songs" con CASCADE on delete. Si una canción
