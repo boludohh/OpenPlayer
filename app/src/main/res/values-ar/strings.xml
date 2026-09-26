@@ -35,10 +35,7 @@
     <string name="cd_more_options">المزيد من الخيارات</string>
     <string name="language_es">الإسبانية</string>
     <string name="language_en">الإنجليزية</string>
-    <string name="language_pt_br">البرتغالية (البرازيل)</string>
-    <string name="language_pt">البرتغالية</string>
     <string name="language_ar">العربية</string>
-    <string name="language_fr">الفرنسية</string>
     <string name="home_screen_placeholder">الرئيسية</string>
     <string name="home_greeting_morning">صباح الخير</string>
     <string name="home_greeting_afternoon">مساء الخير</string>

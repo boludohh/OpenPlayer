@@ -35,10 +35,7 @@
     <string name="cd_more_options">More options</string>
     <string name="language_es">Spanish</string>
     <string name="language_en">English</string>
-    <string name="language_pt_br">Portuguese (Brazil)</string>
-    <string name="language_pt">Portuguese</string>
     <string name="language_ar">Arabic</string>
-    <string name="language_fr">French</string>
     <string name="home_screen_placeholder">Home</string>
     <string name="home_greeting_morning">Good morning</string>
     <string name="home_greeting_afternoon">Good afternoon</string>

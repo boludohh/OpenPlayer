@@ -60,10 +60,7 @@ import kotlinx.coroutines.launch
 private val languageEntries: List<Pair<String, Int>> = listOf(
     LocaleManager.LANGUAGE_ES to R.string.language_es,
     LocaleManager.LANGUAGE_EN to R.string.language_en,
-    LocaleManager.LANGUAGE_PT_BR to R.string.language_pt_br,
-    LocaleManager.LANGUAGE_PT to R.string.language_pt,
-    LocaleManager.LANGUAGE_AR to R.string.language_ar,
-    LocaleManager.LANGUAGE_FR to R.string.language_fr
+    LocaleManager.LANGUAGE_AR to R.string.language_ar
 )
 
 /** Especificación de una tarjeta de permiso dentro del panel. */
