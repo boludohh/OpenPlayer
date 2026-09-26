@@ -13,7 +13,6 @@ import androidx.media3.common.SimpleBasePlayer
 import androidx.media3.common.util.UnstableApi
 import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
-import com.openplayer.music.data.media.AudioFormatParser
 import com.openplayer.music.data.media.CoverRepository
 import com.un4seen.bass.BASS
 import com.un4seen.bass.BASSFLAC
@@ -195,6 +194,7 @@ class BassPlayerAdapter(
      * Si el dispositivo por defecto falla (típico en instalaciones frescas
      * o cuando el HAL de audio no está listo), intenta con OpenSL ES y
      * luego con AudioTrack.
+     *
      * @return true si BASS se inicializó correctamente con algún dispositivo.
      */
     private fun initBassWithFallback(): Boolean {
@@ -204,6 +204,7 @@ class BassPlayerAdapter(
             return true
         }
         Log.w(TAG, "BASS_Init failed with default device, error: ${BASS.BASS_ErrorGetCode()}")
+
         // Liberar estado parcial antes del siguiente intento
         BASS.BASS_Free()
 
@@ -241,7 +242,7 @@ class BassPlayerAdapter(
             Log.i(TAG, "Mixer created successfully")
         }
     }
-    
+
     // =========================================================================
     // Estado reportado a Media3
     // =========================================================================
@@ -321,7 +322,9 @@ class BassPlayerAdapter(
      * es otro (cola personalizada), hace merge reactivo: actualiza metadatos
      * de los ítems existentes, elimina los que fueron borrados, y conserva
      * el orden original de la cola.
+     *
      * Se ejecuta en el hilo del Looper del player para garantizar thread safety.
+     *
      * @param newPlaylist Nueva lista de MediaItem de la biblioteca.
      */
     fun updateLibraryPlaylist(newPlaylist: List<MediaItem>) {
@@ -368,6 +371,7 @@ class BassPlayerAdapter(
         } else {
             currentIndex = 0.coerceIn(0, max(0, currentPlaylist.size - 1))
         }
+
         invalidateState()
     }
 
@@ -376,6 +380,7 @@ class BassPlayerAdapter(
      * personalizada, elimina los que fueron borrados de la biblioteca, y
      * conserva el orden original. La canción actual no se interrumpe si sigue
      * existiendo.
+     *
      * @param libraryItems Lista actualizada de MediaItem de la biblioteca.
      */
     private fun mergePlaylistReactive(libraryItems: List<MediaItem>) {
@@ -390,7 +395,6 @@ class BassPlayerAdapter(
         val mergedPlaylist = currentPlaylist.mapNotNull { currentItem ->
             libraryMap[currentItem.mediaId]
         }
-
         Log.d(DEBUG_TAG, "mergePlaylistReactive: mergedPlaylistSize=${mergedPlaylist.size} (from ${currentPlaylist.size})")
 
         // Si la canción actual fue eliminada, avanzar a la siguiente o marcar IDLE
@@ -479,6 +483,7 @@ class BassPlayerAdapter(
                 else -> currentIndex
             }
         }
+
         invalidateState()
         return Futures.immediateVoidFuture()
     }
@@ -493,10 +498,12 @@ class BassPlayerAdapter(
         }
 
         val safeToIndex = toIndex.coerceIn(fromIndex, currentPlaylist.size)
+
         val newList = currentPlaylist.toMutableList()
         val moved = newList.subList(fromIndex, safeToIndex).toList()
         newList.subList(fromIndex, safeToIndex).clear()
         newList.addAll(newIndex.coerceIn(0, newList.size), moved)
+
         currentPlaylist = newList
         invalidateState()
         return Futures.immediateVoidFuture()
@@ -600,7 +607,7 @@ class BassPlayerAdapter(
         invalidateState()
         return Futures.immediateVoidFuture()
     }
-    
+
     // =========================================================================
     // Lógica interna de BASS con BASSmix
     // =========================================================================
@@ -611,6 +618,7 @@ class BassPlayerAdapter(
      * reintenta la inicialización con la cadena de fallback y re-vincula
      * el stream actual al mixer nuevo. Se llama en cada play para que el
      * adapter se auto-repare.
+     *
      * @return true si el mixer quedó operativo.
      */
     private fun ensureBassReady(): Boolean {
@@ -658,6 +666,7 @@ class BassPlayerAdapter(
         }
 
         val handle = createDecoderStream(path)
+
         if (handle == 0) {
             currentHandle = 0
             currentPlaybackState = Player.STATE_IDLE
@@ -681,33 +690,34 @@ class BassPlayerAdapter(
 
     /**
      * Crea un stream decodificador para el archivo dado, eligiendo el
-     * wrapper apropiado según el formato detectado:
-     * Opus → BASSOPUS.BASS_OPUS_StreamCreateFile()
-     * FLAC u OGG FLAC → BASSFLAC.BASS_FLAC_StreamCreateFile()
-     * AAC/M4A → BASS_AAC.BASS_AAC_StreamCreateFile()
-     * Otros (MP3, OGG Vorbis, etc.) → BASS.BASS_StreamCreateFile()
+     * wrapper apropiado según el formato detectado por extensión:
+     * - Opus → BASSOPUS.BASS_OPUS_StreamCreateFile()
+     * - FLAC u OGG FLAC → BASSFLAC.BASS_FLAC_StreamCreateFile()
+     * - AAC/M4A → BASS_AAC.BASS_AAC_StreamCreateFile()
+     * - Otros (MP3, OGG Vorbis, etc.) → BASS.BASS_StreamCreateFile()
+     *
+     * La validación estricta de formato ya fue realizada por KTagLib durante
+     * el escaneo de la biblioteca. Si BASS no puede abrir el archivo,
+     * devolverá handle = 0 y el adapter manejará el error gracefully.
+     *
      * @param path Ruta absoluta al archivo de audio.
-     * @return Handle del stream ( > 0) o 0 si falló.
+     * @return Handle del stream (> 0) o 0 si falló.
      */
     private fun createDecoderStream(path: String): Int {
         val format = try {
-            if (AudioFormatParser.isValid(path)) {
-                when {
-                    path.endsWith(".opus", ignoreCase = true) -> "opus"
-                    path.endsWith(".flac", ignoreCase = true) -> "flac"
-                    path.endsWith(".ogg", ignoreCase = true) -> {
-                        // Detectar si es OGG FLAC o OGG Vorbis/Opus
-                        when (detectOggFormat(path)) {
-                            "flac" -> "flac"
-                            "opus" -> "opus"
-                            else -> "vorbis"
-                        }
+            when {
+                path.endsWith(".opus", ignoreCase = true) -> "opus"
+                path.endsWith(".flac", ignoreCase = true) -> "flac"
+                path.endsWith(".ogg", ignoreCase = true) -> {
+                    // Detectar si es OGG FLAC o OGG Vorbis/Opus
+                    when (detectOggFormat(path)) {
+                        "flac" -> "flac"
+                        "opus" -> "opus"
+                        else -> "vorbis"
                     }
-                    path.endsWith(".m4a", ignoreCase = true) || path.endsWith(".aac", ignoreCase = true) -> "aac"
-                    else -> "other"
                 }
-            } else {
-                "other"
+                path.endsWith(".m4a", ignoreCase = true) || path.endsWith(".aac", ignoreCase = true) -> "aac"
+                else -> "other"
             }
         } catch (e: Exception) {
             Log.w(TAG, "Error detecting format for $path", e)
@@ -724,6 +734,7 @@ class BassPlayerAdapter(
 
     /**
      * Detecta el formato de un archivo OGG leyendo el header.
+     *
      * @param path Ruta absoluta al archivo OGG.
      * @return "flac", "opus", "vorbis" o "unknown".
      */
@@ -748,6 +759,7 @@ class BassPlayerAdapter(
                     header[5] == 'i'.code.toByte() && header[6] == 's'.code.toByte()) {
                     return "vorbis"
                 }
+
                 if (read >= 8 && header[0] == 'O'.code.toByte() &&
                     header[1] == 'p'.code.toByte() && header[2] == 'u'.code.toByte() &&
                     header[3] == 's'.code.toByte() && header[4] == 'H'.code.toByte() &&
@@ -755,11 +767,13 @@ class BassPlayerAdapter(
                     header[7] == 'd'.code.toByte()) {
                     return "opus"
                 }
+
                 if (read >= 5 && header[0] == 0x7F.toByte() &&
                     header[1] == 'F'.code.toByte() && header[2] == 'L'.code.toByte() &&
                     header[3] == 'A'.code.toByte() && header[4] == 'C'.code.toByte()) {
                     return "flac"
                 }
+
                 "unknown"
             }
         } catch (e: Exception) {
@@ -784,7 +798,6 @@ class BassPlayerAdapter(
     private fun scheduleNextGapless(remainingMs: Long) {
         nextScheduled = true
         val nextIndex = currentIndex + 1
-
         if (nextIndex >= currentPlaylist.size) {
             return
         }
@@ -800,7 +813,6 @@ class BassPlayerAdapter(
         }
 
         nextHandle = handle
-
         if (mixerHandle == 0) return
 
         val startBytes = BASS.BASS_ChannelSeconds2Bytes(mixerHandle, remainingMs / 1000.0)
@@ -909,6 +921,7 @@ class BassPlayerAdapter(
             }
 
             val previousState = currentPlaybackState
+
             val channelEnded = positionMs < 0L ||
                     active == CHANNEL_ERROR ||
                     active == BASS.BASS_ACTIVE_STOPPED
@@ -968,6 +981,7 @@ class BassPlayerAdapter(
 
             nextScheduled = false
             currentPositionMs = 0L
+
             currentDurationMs = if (currentHandle != 0) {
                 lengthMsOf(currentHandle)
             } else {
@@ -1036,7 +1050,6 @@ class BassPlayerAdapter(
 
 /**
  * Extensión para convertir [Song] a [MediaItem] de Media3.
- *
  * Incluye metadatos (título, artista, álbum, carátula) y la URI del
  * archivo local. La carátula se obtiene de [CoverRepository] si existe.
  */
@@ -1044,7 +1057,6 @@ fun com.openplayer.music.data.model.Song.toMediaItem(
     coverRepository: CoverRepository
 ): MediaItem {
     val coverFile = coverRepository.coverFile(path)
-
     val metadata = MediaMetadata.Builder()
         .setTitle(title)
         .setArtist(artist)

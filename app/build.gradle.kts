@@ -23,8 +23,8 @@ android {
         applicationId = "com.openplayer.music"
         minSdk = 27
         targetSdk = 37
-        versionCode = 81
-        versionName = "0.35.0"
+        versionCode = 82
+        versionName = "0.35.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

@@ -349,7 +349,7 @@ class AudioRepository(
                     path = path,
                     bitrate = metadata.audioProperties?.bitrate,
                     sampleRate = metadata.audioProperties?.sampleRate,
-                    channels = metadata.audioProperties?.channels,
+                    channels = metadata.audioProperties?.channelCount,
                     dateAdded = dateAdded
                 )
 
