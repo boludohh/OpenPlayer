@@ -5,7 +5,7 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.util.LruCache
-import com.openplayer.music.native.NativeBridge
+import com.simplecityapps.ktaglib.KTagLib
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -27,7 +27,7 @@ import java.util.concurrent.ConcurrentHashMap
  * ## Ciclo de vida
  * La extracción y guardado se realiza **en el mismo pipeline de
  * escaneo** ([AudioRepository.observeSongBatches]), junto con la
- * extracción de metadatos de TagLib. Es idempotente: si el archivo
+ * extracción de metadatos de KTagLib. Es idempotente: si el archivo
  * ya existe en disco, no se hace nada.
  *
  * La lectura (para UI/notificación) sigue el orden:
@@ -38,7 +38,7 @@ import java.util.concurrent.ConcurrentHashMap
  * el archivo de disco correspondiente.
  *
  * ## Formatos de imagen soportados
- * Se detectan por magic bytes (sin confiar en metadatos de TagLib,
+ * Se detectan por magic bytes (sin confiar en metadatos de KTagLib,
  * que pueden venir mal):
  * - JPEG (`FF D8 FF`) → `.jpg`
  * - PNG (`89 50 4E 47`) → `.png`
@@ -92,6 +92,9 @@ class CoverRepository(private val context: Context) {
     /** Tamaño máximo del lado más largo para bitmaps en memoria. */
     private val maxMemorySize = 512
 
+    /** Instancia de KTagLib para extracción de portadas. */
+    private val kTagLib = KTagLib()
+
     // =========================================================================
     // API pública — escritura (llamada durante el escaneo)
     // =========================================================================
@@ -111,8 +114,11 @@ class CoverRepository(private val context: Context) {
         // Idempotencia: si ya existe cualquier variante, salir
         if (findExistingCover(cacheKey) != null) return true
 
-        // Extraer bytes crudos desde TagLib
-        val bytes = NativeBridge.extractCoverBytes(path) ?: return false
+        // Extraer bytes crudos desde KTagLib usando FileDescriptor
+        val bytes = FileDescriptorHelper.useFd(path) { fd ->
+            kTagLib.getArtwork(fd, File(path).name)
+        } ?: return false
+        
         if (bytes.isEmpty()) return false
 
         // Validar decodibilidad: si el dispositivo no puede abrirlos,

@@ -10,6 +10,7 @@ ksp = "2.3.11"
 room = "2.8.4"
 media3 = "1.11.0"
 coil = "3.6.3"
+ktaglib = "2.0.0"
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
@@ -34,3 +35,4 @@ androidx-room-compiler = { group = "androidx.room", name = "room-compiler", vers
 media3-session = { group = "androidx.media3", name = "media3-session", version.ref = "media3" }
 coil-compose = { module = "io.coil-kt.coil3:coil-compose", version.ref = "coil" }
 coil-network-okhttp = { module = "io.coil-kt.coil3:coil-network-okhttp", version.ref = "coil" }
+ktaglib = { module = "com.simplecityapps:ktaglib", version.ref = "ktaglib" }

@@ -11,7 +11,7 @@ import android.provider.MediaStore
 import com.openplayer.music.data.AppPreferences
 import com.openplayer.music.data.db.AppDatabase
 import com.openplayer.music.data.db.SongEntity
-import com.openplayer.music.native.NativeBridge
+import com.simplecityapps.ktaglib.KTagLib
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -32,11 +32,10 @@ import java.io.File
  * - **MediaStore**: descubre archivos de audio del dispositivo
  *   (`IS_MUSIC != 0`). Es la fuente primaria de `id`, `path`,
  *   `duration`, `dateAdded` y valores de respaldo para `title`/`artist`.
- * - **AudioFormatParser**: validación de formato por lectura directa
- *   de bytes del header (Kotlin puro, sin dependencias nativas).
- * - **NativeBridge / TagLib 2.3.1**: extracción estricta de
- *   metadatos. Tiene prioridad sobre MediaStore para `title` y
- *   `artist`; si no devuelve valor, se usa el de MediaStore.
+ * - **KTagLib**: extracción estricta de metadatos usando TagLib 2.3.2.
+ *   Tiene prioridad sobre MediaStore para `title` y `artist`; si no
+ *   devuelve valor, se usa el de MediaStore. También actúa como validador
+ *   de formato: si KTagLib no puede leer el archivo, se descarta.
  * - **CoverRepository**: extracción y guardado de la portada
  *   embebida en el mismo pipeline, junto con los metadatos.
  * - **Room**: caché reconstruible (ver AppDatabase).
@@ -80,15 +79,15 @@ import java.io.File
  *
  * 1. Filtro fantasma: path nulo o `File(path)` inexistente.
  * 2. Duración mínima: 30.000 ms (descarta tonos y notificaciones).
- * 3. Validación de formato: `AudioFormatParser.isValid`.
- * 4. Extracción TagLib: `NativeBridge.extractMetadata`.
- *    - `title` y `artist` de TagLib si están presentes, si no,
+ * 3. Extracción KTagLib con FileDescriptor: valida formato y extrae metadatos.
+ *    - Si KTagLib devuelve null, el archivo se descarta (formato inválido).
+ *    - `title` y `artist` de KTagLib si están presentes, si no,
  *      fallback a los valores obtenidos de MediaStore.
- * 5. Extracción y guardado de portada (idempotente):
+ * 4. Extracción y guardado de portada (idempotente):
  *    `CoverRepository.extractAndSaveCover(path)`. Si el archivo
  *    ya existe en disco, no hace nada.
- * 6. Construcción de [SongEntity].
- * 7. Emisión en lotes de 300 (no acumular toda la biblioteca en
+ * 5. Construcción de [SongEntity].
+ * 6. Emisión en lotes de 300 (no acumular toda la biblioteca en
  *    memoria antes de insertar).
  *
  * Todo el trabajo corre con prioridad BACKGROUND y en
@@ -137,6 +136,9 @@ class AudioRepository(
 
     /** Repositorio de portadas: extracción inline y limpieza. */
     private val coverRepository = CoverRepository(context)
+
+    /** Instancia de KTagLib para extracción de metadatos. */
+    private val kTagLib = KTagLib()
 
     // =========================================================================
     // API pública
@@ -244,8 +246,7 @@ class AudioRepository(
 
     /**
      * Flow de lotes de canciones obtenidas de MediaStore y
-     * validadas/enriquecidas por AudioFormatParser, TagLib y
-     * extracción de portada.
+     * validadas/enriquecidas por KTagLib y extracción de portada.
      *
      * @param isFull true = escaneo completo (sin filtros de tiempo).
      * @param sinceSeconds timestamp epoch en segundos; sólo se
@@ -312,48 +313,49 @@ class AudioRepository(
                 // 2. Duración mínima
                 if (durationMs < minDurationMs) continue
 
-                // 3. Validación de formato con AudioFormatParser (Kotlin puro)
-                val formatOk = AudioFormatParser.isValid(path)
-                if (!formatOk) continue
+                // 3. Extracción KTagLib con FileDescriptor (valida formato y extrae metadatos)
+                val metadata = FileDescriptorHelper.useFd(path) { fd ->
+                    kTagLib.getMetadata(fd, File(path).name)
+                } ?: continue // Si KTagLib devuelve null, el archivo es inválido
 
-                // 4. Extracción TagLib (con fallback a MediaStore)
-                val metadata = runCatching { NativeBridge.extractMetadata(path) }
-                    .getOrDefault(emptyMap())
+                // Mapeo de propertyMap (KTagLib usa mayúsculas, nosotros minúsculas)
+                val propertyMap = metadata.propertyMap
+                val title = propertyMap["TITLE"]?.firstOrNull()?.takeIf { it.isNotBlank() } 
+                    ?: mediaStoreTitle
+                val artist = propertyMap["ARTIST"]?.firstOrNull()?.takeIf { it.isNotBlank() } 
+                    ?: mediaStoreArtist
 
-                val title = metadata["title"]?.takeIf { it.isNotBlank() } ?: mediaStoreTitle
-                val artist = metadata["artist"]?.takeIf { it.isNotBlank() } ?: mediaStoreArtist
-
-                // 5. Extracción y guardado de portada inline (idempotente).
+                // 4. Extracción y guardado de portada inline (idempotente).
                 //    Si el archivo ya existe en disco, extractAndSaveCover
                 //    retorna sin hacer I/O pesado. Se ejecuta en el mismo
                 //    hilo BACKGROUND del escaneo.
                 coverRepository.extractAndSaveCover(path)
 
-                // 6. Construcción de SongEntity
+                // 5. Construcción de SongEntity
                 val entity = SongEntity(
                     id = id,
                     title = title,
                     artist = artist,
-                    album = metadata["album"]?.takeIf { it.isNotBlank() }
+                    album = propertyMap["ALBUM"]?.firstOrNull()?.takeIf { it.isNotBlank() }
                         ?: mediaStoreAlbum.takeIf { it.isNotBlank() },
-                    albumArtist = metadata["albumArtist"]?.takeIf { it.isNotBlank() },
-                    genre = metadata["genre"]?.takeIf { it.isNotBlank() },
-                    composer = metadata["composer"]?.takeIf { it.isNotBlank() },
-                    lyrics = metadata["lyrics"]?.takeIf { it.isNotBlank() },
-                    trackNumber = metadata["trackNumber"]?.parseSlashFirst(),
-                    discNumber = metadata["discNumber"]?.parseSlashFirst(),
-                    year = metadata["year"]?.parseYear(),
+                    albumArtist = propertyMap["ALBUMARTIST"]?.firstOrNull()?.takeIf { it.isNotBlank() },
+                    genre = propertyMap["GENRE"]?.firstOrNull()?.takeIf { it.isNotBlank() },
+                    composer = propertyMap["COMPOSER"]?.firstOrNull()?.takeIf { it.isNotBlank() },
+                    lyrics = propertyMap["LYRICS"]?.firstOrNull()?.takeIf { it.isNotBlank() },
+                    trackNumber = propertyMap["TRACKNUMBER"]?.firstOrNull()?.parseSlashFirst(),
+                    discNumber = propertyMap["DISCNUMBER"]?.firstOrNull()?.parseSlashFirst(),
+                    year = propertyMap["DATE"]?.firstOrNull()?.parseYear(),
                     duration = durationMs,
                     path = path,
-                    bitrate = metadata["bitrate"]?.toIntOrNull(),
-                    sampleRate = metadata["sampleRate"]?.toIntOrNull(),
-                    channels = metadata["channels"]?.toIntOrNull(),
+                    bitrate = metadata.audioProperties?.bitrate,
+                    sampleRate = metadata.audioProperties?.sampleRate,
+                    channels = metadata.audioProperties?.channels,
                     dateAdded = dateAdded
                 )
 
                 batch += entity
 
-                // 7. Emitir lote cuando alcanza el tamaño configurado
+                // 6. Emitir lote cuando alcanza el tamaño configurado
                 if (batch.size >= batchSize) {
                     emit(ArrayList(batch))
                     batch.clear()
