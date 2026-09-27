@@ -26,9 +26,65 @@
     native <methods>;
 }
 
-# Reglas para BASS y BASSmix (JNI)
-# Preserva todas las clases del paquete com.un4seen.bass porque los símbolos
-# JNI en libbass.so y libbassmix.so codifican el nombre exacto del paquete.
-# Si R8 renombra estas clases, el enlace nativo se rompe en runtime.
--keep class com.un4seen.bass.** { *; }
--keepclassmembers class com.un4seen.bass.** { *; }
+# Reglas para BASS core (JNI)
+# Preserva el wrapper principal de BASS porque los símbolos JNI en libbass.so
+# codifican el nombre exacto del paquete. Si R8 renombra esta clase,
+# el enlace nativo se rompe en runtime.
+-keep class com.un4seen.bass.BASS { *; }
+-keepclassmembers class com.un4seen.bass.BASS { *; }
+
+# Reglas para BASSmix (JNI)
+# Preserva el wrapper de BASSmix porque los símbolos JNI en libbassmix.so
+# codifican el nombre exacto del paquete. Si R8 renombra esta clase,
+# el enlace nativo se rompe en runtime.
+-keep class com.un4seen.bass.BASSmix { *; }
+-keepclassmembers class com.un4seen.bass.BASSmix { *; }
+
+# Reglas para BASS_AAC (JNI)
+# Preserva el wrapper de BASS_AAC porque los símbolos JNI en libbass_aac.so
+# codifican el nombre exacto del paquete. Si R8 renombra esta clase,
+# el enlace nativo se rompe en runtime.
+-keep class com.un4seen.bass.BASS_AAC { *; }
+-keepclassmembers class com.un4seen.bass.BASS_AAC { *; }
+
+# Reglas para BASSOPUS (JNI)
+# Preserva el wrapper de BASSOPUS porque los símbolos JNI en libbassopus.so
+# codifican el nombre exacto del paquete. Si R8 renombra esta clase,
+# el enlace nativo se rompe en runtime.
+-keep class com.un4seen.bass.BASSOPUS { *; }
+-keepclassmembers class com.un4seen.bass.BASSOPUS { *; }
+
+# Reglas para BASSFLAC (JNI)
+# Preserva el wrapper de BASSFLAC porque los símbolos JNI en libbassflac.so
+# codifican el nombre exacto del paquete. Si R8 renombra esta clase,
+# el enlace nativo se rompe en runtime.
+-keep class com.un4seen.bass.BASSFLAC { *; }
+-keepclassmembers class com.un4seen.bass.BASSFLAC { *; }
+
+# Reglas para BASSALAC (JNI)
+# Preserva el wrapper de BASSALAC porque los símbolos JNI en libbassalac.so
+# codifican el nombre exacto del paquete. Si R8 renombra esta clase,
+# el enlace nativo se rompe en runtime.
+-keep class com.un4seen.bass.BASSALAC { *; }
+-keepclassmembers class com.un4seen.bass.BASSALAC { *; }
+
+# Reglas para BASSAPE (JNI)
+# Preserva el wrapper de BASSAPE porque los símbolos JNI en libbassape.so
+# codifican el nombre exacto del paquete. Si R8 renombra esta clase,
+# el enlace nativo se rompe en runtime.
+-keep class com.un4seen.bass.BASSAPE { *; }
+-keepclassmembers class com.un4seen.bass.BASSAPE { *; }
+
+# Reglas para BASSWV (JNI)
+# Preserva el wrapper de BASSWV porque los símbolos JNI en libbasswv.so
+# codifican el nombre exacto del paquete. Si R8 renombra esta clase,
+# el enlace nativo se rompe en runtime.
+-keep class com.un4seen.bass.BASSWV { *; }
+-keepclassmembers class com.un4seen.bass.BASSWV { *; }
+
+# Reglas para BASSDSD (JNI)
+# Preserva el wrapper de BASSDSD porque los símbolos JNI en libbassdsd.so
+# codifican el nombre exacto del paquete. Si R8 renombra esta clase,
+# el enlace nativo se rompe en runtime.
+-keep class com.un4seen.bass.BASSDSD { *; }
+-keepclassmembers class com.un4seen.bass.BASSDSD { *; }

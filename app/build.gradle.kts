@@ -23,8 +23,8 @@ android {
         applicationId = "com.openplayer.music"
         minSdk = 27
         targetSdk = 37
-        versionCode = 84
-        versionName = "0.36.0"
+        versionCode = 85
+        versionName = "0.37.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -74,12 +74,6 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_21
         targetCompatibility = JavaVersion.VERSION_21
-    }
-
-    sourceSets {
-        getByName("main") {
-            jniLibs.directories += "src/main/cpp/bass"
-        }
     }
 }
 

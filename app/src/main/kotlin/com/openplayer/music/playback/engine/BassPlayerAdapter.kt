@@ -15,8 +15,12 @@ import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
 import com.openplayer.music.data.media.CoverRepository
 import com.un4seen.bass.BASS
+import com.un4seen.bass.BASSALAC
+import com.un4seen.bass.BASSAPE
+import com.un4seen.bass.BASSDSD
 import com.un4seen.bass.BASSFLAC
 import com.un4seen.bass.BASSOPUS
+import com.un4seen.bass.BASSWV
 import com.un4seen.bass.BASS_AAC
 import com.un4seen.bass.BASSmix
 import kotlinx.coroutines.CoroutineScope
@@ -35,7 +39,7 @@ import kotlin.math.max
  * de la interfaz [Player] y solo tener que sobrescribir los handlers
  * que traducen cada comando Media3 a llamadas equivalentes de BASS
  * usando los wrappers oficiales [BASS], [BASSmix], [BASSOPUS],
- * [BASSFLAC] y [BASS_AAC].
+ * [BASSFLAC], [BASS_AAC], [BASSALAC], [BASSAPE], [BASSWV] y [BASSDSD].
  *
  * Arquitectura de reproducción con BASSmix
  *
@@ -49,7 +53,9 @@ import kotlin.math.max
  * `BASS_STREAM_DECODE` (sin PRESCAN, apertura instantánea) y se añade
  * al mixer, no se reproduce directamente. Para archivos Opus se usa
  * [BASSOPUS], para FLAC se usa [BASSFLAC], para AAC se usa [BASS_AAC],
- * y para el resto (MP3, OGG Vorbis) se usa [BASS] genérico.
+ * para ALAC se usa [BASSALAC], para APE se usa [BASSAPE], para WavPack
+ * se usa [BASSWV], para DSD se usa [BASSDSD], y para el resto (MP3, OGG Vorbis)
+ * se usa [BASS] genérico.
  *
  * Gapless puro: el polling detecta cuánto falta para el final y,
  * [GAPLESS_SCHEDULE_MS] antes, añade la siguiente pista con
@@ -171,9 +177,10 @@ class BassPlayerAdapter(
         // Inicializa BASS con cadena de fallback de device de audio
         bassInitialized = initBassWithFallback()
 
-        // Todos los formatos soportados (Opus, FLAC, AAC) se usan vía sus
-        // wrappers oficiales (BASSOPUS, BASSFLAC, BASS_AAC), que cargan sus
-        // respectivas librerías nativas automáticamente vía System.loadLibrary.
+        // Todos los formatos soportados (Opus, FLAC, AAC, ALAC, APE, WavPack, DSD)
+        // se usan vía sus wrappers oficiales (BASSOPUS, BASSFLAC, BASS_AAC,
+        // BASSALAC, BASSAPE, BASSWV, BASSDSD), que cargan sus respectivas
+        // librerías nativas automáticamente vía System.loadLibrary.
         // Por eso no hay carga de plugins aquí.
         if (bassInitialized) {
             createMixer()
@@ -647,7 +654,9 @@ class BassPlayerAdapter(
      * Crea un stream decodificador BASS para el ítem actual de la playlist
      * y lo añade al mixer. Sin PRESCAN para que el inicio sea instantáneo.
      * Para archivos Opus usa BASSOPUS, para FLAC usa BASSFLAC, para AAC
-     * usa BASS_AAC, y para el resto (MP3, OGG Vorbis) usa BASS genérico.
+     * usa BASS_AAC, para ALAC usa BASSALAC, para APE usa BASSAPE, para
+     * WavPack usa BASSWV, para DSD usa BASSDSD, y para el resto (MP3, OGG Vorbis)
+     * usa BASS genérico.
      */
     private fun createStreamForCurrentItem() {
         if (currentPlaylist.isEmpty() || currentIndex !in currentPlaylist.indices) {
@@ -693,7 +702,10 @@ class BassPlayerAdapter(
      * wrapper apropiado según el formato detectado por extensión:
      * - Opus → BASSOPUS.BASS_OPUS_StreamCreateFile()
      * - FLAC u OGG FLAC → BASSFLAC.BASS_FLAC_StreamCreateFile()
-     * - AAC/M4A → BASS_AAC.BASS_AAC_StreamCreateFile()
+     * - AAC/M4A/ALAC → BASSALAC.BASS_ALAC_StreamCreateFile() o BASS_AAC
+     * - APE → BASSAPE.BASS_APE_StreamCreateFile()
+     * - WavPack → BASSWV.BASS_WV_StreamCreateFile()
+     * - DSD (DSF/DFF) → BASSDSD.BASS_DSD_StreamCreateFile()
      * - Otros (MP3, OGG Vorbis, etc.) → BASS.BASS_StreamCreateFile()
      *
      * La validación estricta de formato ya fue realizada por KTagLib durante
@@ -717,6 +729,10 @@ class BassPlayerAdapter(
                     }
                 }
                 path.endsWith(".m4a", ignoreCase = true) || path.endsWith(".aac", ignoreCase = true) -> "aac"
+                path.endsWith(".alac", ignoreCase = true) -> "alac"
+                path.endsWith(".ape", ignoreCase = true) -> "ape"
+                path.endsWith(".wv", ignoreCase = true) -> "wv"
+                path.endsWith(".dsf", ignoreCase = true) || path.endsWith(".dff", ignoreCase = true) -> "dsd"
                 else -> "other"
             }
         } catch (e: Exception) {
@@ -728,6 +744,10 @@ class BassPlayerAdapter(
             "opus" -> BASSOPUS.BASS_OPUS_StreamCreateFile(path, 0, 0, BASS.BASS_STREAM_DECODE)
             "flac" -> BASSFLAC.BASS_FLAC_StreamCreateFile(path, 0, 0, BASS.BASS_STREAM_DECODE)
             "aac" -> BASS_AAC.BASS_AAC_StreamCreateFile(path, 0, 0, BASS.BASS_STREAM_DECODE)
+            "alac" -> BASSALAC.BASS_ALAC_StreamCreateFile(path, 0, 0, BASS.BASS_STREAM_DECODE)
+            "ape" -> BASSAPE.BASS_APE_StreamCreateFile(path, 0, 0, BASS.BASS_STREAM_DECODE)
+            "wv" -> BASSWV.BASS_WV_StreamCreateFile(path, 0, 0, BASS.BASS_STREAM_DECODE)
+            "dsd" -> BASSDSD.BASS_DSD_StreamCreateFile(path, 0, 0, BASS.BASS_STREAM_DECODE, DSD_FREQ)
             else -> BASS.BASS_StreamCreateFile(path, 0, 0, BASS.BASS_STREAM_DECODE)
         }
     }
@@ -1045,6 +1065,14 @@ class BassPlayerAdapter(
          * el handle ya fue liberado (canal terminado con AUTOFREE).
          */
         private const val CHANNEL_ERROR = -1
+
+        /**
+         * Frecuencia de salida para conversión DSD a PCM (Hz).
+         * BASSDSD requiere una frecuencia de muestreo para la conversión
+         * de DSD a PCM. 88200 Hz es un valor estándar que proporciona
+         * buena calidad de audio para archivos DSD.
+         */
+        private const val DSD_FREQ = 88200
     }
 }
 

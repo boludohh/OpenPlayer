@@ -22,8 +22,8 @@ jobs:
 
       # =====================================================
       # Librerías BASS desde el repo privado (boludohh/bass-libs)
-      # Debe ir ANTES de compilar: CMake enlaza libbass.so
-      # y Gradle empaca los plugins desde jniLibs/.
+      # Debe ir ANTES de compilar: Gradle empaca los plugins
+      # y el core (libbass.so) desde jniLibs/.
       # =====================================================
       - name: Clonar y extraer librerías BASS (repo privado)
         env:
@@ -34,9 +34,7 @@ jobs:
           # Clonar el repo privado (shallow: solo el último commit)
           git clone --depth 1 "https://x-access-token:${BASS_TOKEN}@github.com/boludohh/bass-libs.git" /tmp/bass-libs
 
-          # Carpetas de destino dentro del proyecto
-          mkdir -p app/src/main/cpp/bass/armeabi-v7a
-          mkdir -p app/src/main/cpp/bass/arm64-v8a
+          # Carpetas de destino dentro del proyecto (estándar Android jniLibs)
           mkdir -p app/src/main/jniLibs/armeabi-v7a
           mkdir -p app/src/main/jniLibs/arm64-v8a
 
@@ -51,11 +49,14 @@ jobs:
           }
 
           for ABI in arm64-v8a armeabi-v7a; do
-            # Core: lo enlaza tu CMake (glue openplayeraudio)
-            copy_lib "$ABI" libbass.so "app/src/main/cpp/bass/$ABI/libbass.so"
+            # Core: se carga vía System.loadLibrary("bass") desde BASS.java
+            copy_lib "$ABI" libbass.so "app/src/main/jniLibs/$ABI/libbass.so"
 
-            # Plugins: Gradle los empaca al APK desde jniLibs
-            for PLUGIN in libbass_aac.so libbass_fx.so libbassflac.so libbassmix.so libbassopus.so; do
+            # Plugins: Gradle los empaca al APK y los wrappers Java
+            # (BASSmix, BASS_AAC, BASSOPUS, BASSFLAC, BASSALAC,
+            # BASSAPE, BASSWV, BASSDSD, BASS_FX) los cargan con
+            # System.loadLibrary() al referenciar sus métodos nativos.
+            for PLUGIN in libbassmix.so libbass_fx.so libbass_aac.so libbassopus.so libbassflac.so libbassalac.so libbassape.so libbasswv.so libbassdsd.so; do
               copy_lib "$ABI" "$PLUGIN" "app/src/main/jniLibs/$ABI/$PLUGIN"
             done
           done
