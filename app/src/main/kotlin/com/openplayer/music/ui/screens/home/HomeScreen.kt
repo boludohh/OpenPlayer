@@ -408,22 +408,45 @@ private fun PlaylistsSection() {
         )
         // Grid manual 2 columnas (evita LazyVerticalGrid anidado en LazyColumn)
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            repeat(2) { rowIndex ->
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    repeat(2) { colIndex ->
-                        val index = rowIndex * 2 + colIndex
-                        PlaylistCard(
-                            title = "Playlist ${index + 1}",
-                            countText = stringResource(R.string.home_songs_count, 0),
-                            coverFiles = emptyList(),
-                            modifier = Modifier.weight(1f),
-                            onClick = { /* TODO: navegar */ }
-                        )
-                    }
-                }
+            // Fila 1
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                PlaylistCard(
+                    title = "Playlist 1",
+                    countText = stringResource(R.string.home_songs_count, 0),
+                    coverFiles = emptyList(),
+                    modifier = Modifier.weight(1f),
+                    onClick = { /* TODO: navegar */ }
+                )
+                PlaylistCard(
+                    title = "Playlist 2",
+                    countText = stringResource(R.string.home_songs_count, 0),
+                    coverFiles = emptyList(),
+                    modifier = Modifier.weight(1f),
+                    onClick = { /* TODO: navegar */ }
+                )
+            }
+            // Fila 2
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                PlaylistCard(
+                    title = "Playlist 3",
+                    countText = stringResource(R.string.home_songs_count, 0),
+                    coverFiles = emptyList(),
+                    modifier = Modifier.weight(1f),
+                    onClick = { /* TODO: navegar */ }
+                )
+                PlaylistCard(
+                    title = "Playlist 4",
+                    countText = stringResource(R.string.home_songs_count, 0),
+                    coverFiles = emptyList(),
+                    modifier = Modifier.weight(1f),
+                    onClick = { /* TODO: navegar */ }
+                )
             }
         }
     }
