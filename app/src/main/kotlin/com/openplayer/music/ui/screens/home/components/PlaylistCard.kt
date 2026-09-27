@@ -87,7 +87,7 @@ fun PlaylistCard(
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
-                        painter = painterResource(id = R.drawable.ic_nav_playlists_filled),
+                        painter = painterResource(id = R.drawable.ic_nav_playlist_filled),
                         contentDescription = null,
                         tint = placeholderIconColor,
                         modifier = Modifier.fillMaxSize(0.4f)

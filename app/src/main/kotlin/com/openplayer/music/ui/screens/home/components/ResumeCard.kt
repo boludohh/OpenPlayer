@@ -87,7 +87,7 @@ fun ResumeCard(
         ) {
             // Placeholder icon
             Icon(
-                painter = painterResource(id = R.drawable.ic_nav_tracks_filled),
+                painter = painterResource(id = R.drawable.ic_nav_music_filled),
                 contentDescription = null,
                 tint = placeholderIconColor,
                 modifier = Modifier.size(22.dp)

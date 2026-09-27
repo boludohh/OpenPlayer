@@ -235,147 +235,45 @@ fun HomeScreen(
             // ── Escuchado recientemente ──
             if (recentlyPlayed.isNotEmpty()) {
                 item(key = "recent_section") {
-                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        HomeSectionHeader(
-                            title = stringResource(R.string.home_recently_played),
-                            showSeeAll = true,
-                            onSeeAllClick = { /* TODO: navegar a historial */ }
-                        )
-                        LazyRow(
-                            horizontalArrangement = Arrangement.spacedBy(12.dp),
-                            contentPadding = PaddingValues(end = 4.dp)
-                        ) {
-                            items(
-                                items = recentlyPlayed,
-                                key = { "recent-${it.id}" }
-                            ) { song ->
-                                HomeTrackCard(
-                                    title = song.title,
-                                    subtitle = song.artist,
-                                    coverFile = coverRepository.coverFile(song.path),
-                                    onClick = { /* TODO: reproducir */ }
-                                )
-                            }
-                        }
-                    }
+                    RecentlyPlayedSection(
+                        songs = recentlyPlayed,
+                        coverRepository = coverRepository
+                    )
                 }
             }
 
             // ── Tus artistas ──
             if (uniqueArtists.isNotEmpty()) {
                 item(key = "artists_section") {
-                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        HomeSectionHeader(
-                            title = stringResource(R.string.home_your_artists),
-                            showSeeAll = true,
-                            onSeeAllClick = { /* TODO: navegar a artistas */ }
-                        )
-                        LazyRow(
-                            horizontalArrangement = Arrangement.spacedBy(12.dp),
-                            contentPadding = PaddingValues(end = 4.dp)
-                        ) {
-                            items(
-                                items = uniqueArtists,
-                                key = { "artist-$it" }
-                            ) { artistName ->
-                                val imageFile = artistImageRepository.artistImageFile(artistName)
-                                HomeArtistCard(
-                                    artistName = artistName,
-                                    imageFile = imageFile,
-                                    onClick = { /* TODO: navegar a detalle artista */ }
-                                )
-                            }
-                        }
-                    }
+                    ArtistsSection(
+                        artists = uniqueArtists,
+                        artistImageRepository = artistImageRepository
+                    )
                 }
             }
 
             // ── Agregado recientemente ──
             if (recentlyAdded.isNotEmpty()) {
                 item(key = "added_section") {
-                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        HomeSectionHeader(
-                            title = stringResource(R.string.home_recently_added),
-                            showSeeAll = true,
-                            onSeeAllClick = { /* TODO: navegar */ }
-                        )
-                        LazyRow(
-                            horizontalArrangement = Arrangement.spacedBy(12.dp),
-                            contentPadding = PaddingValues(end = 4.dp)
-                        ) {
-                            items(
-                                items = recentlyAdded,
-                                key = { "added-${it.id}" }
-                            ) { song ->
-                                HomeTrackCard(
-                                    title = song.title,
-                                    subtitle = song.artist,
-                                    coverFile = coverRepository.coverFile(song.path),
-                                    onClick = { /* TODO: reproducir */ }
-                                )
-                            }
-                        }
-                    }
+                    RecentlyAddedSection(
+                        songs = recentlyAdded,
+                        coverRepository = coverRepository
+                    )
                 }
             }
 
             // ── Playlists ──
             item(key = "playlists_section") {
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    HomeSectionHeader(
-                        title = stringResource(R.string.home_playlists),
-                        showSeeAll = true,
-                        onSeeAllClick = { /* TODO: navegar a playlists */ }
-                    )
-                    // Grid manual 2 columnas (evita LazyVerticalGrid anidado en LazyColumn)
-                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                        repeat(2) { rowIndex ->
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(10.dp)
-                            ) {
-                                repeat(2) { colIndex ->
-                                    val index = rowIndex * 2 + colIndex
-                                    PlaylistCard(
-                                        title = "Playlist ${index + 1}",
-                                        countText = stringResource(R.string.home_songs_count, 0),
-                                        coverFiles = emptyList(),
-                                        modifier = Modifier.weight(1f),
-                                        onClick = { /* TODO: navegar */ }
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
+                PlaylistsSection()
             }
 
             // ── Álbumes ──
             if (recentAlbums.isNotEmpty()) {
                 item(key = "albums_section") {
-                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        HomeSectionHeader(
-                            title = stringResource(R.string.home_albums),
-                            showSeeAll = true,
-                            onSeeAllClick = { /* TODO: navegar a álbumes */ }
-                        )
-                        LazyRow(
-                            horizontalArrangement = Arrangement.spacedBy(12.dp),
-                            contentPadding = PaddingValues(end = 4.dp)
-                        ) {
-                            items(
-                                items = recentAlbums,
-                                key = { "album-${it.title}|${it.artist}" }
-                            ) { album ->
-                                HomeAlbumCard(
-                                    title = album.title,
-                                    artist = album.artist,
-                                    coverFile = album.coverPath?.let { coverRepository.coverFile(it) },
-                                    onClick = { /* TODO: navegar a detalle álbum */ }
-                                )
-                            }
-                        }
-                    }
+                    AlbumsSection(
+                        albums = recentAlbums,
+                        coverRepository = coverRepository
+                    )
                 }
             }
 
@@ -407,6 +305,157 @@ fun HomeScreen(
                 .align(Alignment.TopStart)
                 .padding(start = 20.dp, top = 8.dp)
         )
+    }
+}
+
+@Composable
+private fun RecentlyPlayedSection(
+    songs: List<Song>,
+    coverRepository: com.openplayer.music.data.media.CoverRepository
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        HomeSectionHeader(
+            title = stringResource(R.string.home_recently_played),
+            showSeeAll = true,
+            onSeeAllClick = { /* TODO: navegar a historial */ }
+        )
+        LazyRow(
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            contentPadding = PaddingValues(end = 4.dp)
+        ) {
+            items(
+                items = songs,
+                key = { "recent-${it.id}" }
+            ) { song ->
+                HomeTrackCard(
+                    title = song.title,
+                    subtitle = song.artist,
+                    coverFile = coverRepository.coverFile(song.path),
+                    onClick = { /* TODO: reproducir */ }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ArtistsSection(
+    artists: List<String>,
+    artistImageRepository: com.openplayer.music.data.media.ArtistImageRepository
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        HomeSectionHeader(
+            title = stringResource(R.string.home_your_artists),
+            showSeeAll = true,
+            onSeeAllClick = { /* TODO: navegar a artistas */ }
+        )
+        LazyRow(
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            contentPadding = PaddingValues(end = 4.dp)
+        ) {
+            items(
+                items = artists,
+                key = { "artist-$it" }
+            ) { artistName ->
+                val imageFile = artistImageRepository.artistImageFile(artistName)
+                HomeArtistCard(
+                    artistName = artistName,
+                    imageFile = imageFile,
+                    onClick = { /* TODO: navegar a detalle artista */ }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun RecentlyAddedSection(
+    songs: List<Song>,
+    coverRepository: com.openplayer.music.data.media.CoverRepository
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        HomeSectionHeader(
+            title = stringResource(R.string.home_recently_added),
+            showSeeAll = true,
+            onSeeAllClick = { /* TODO: navegar */ }
+        )
+        LazyRow(
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            contentPadding = PaddingValues(end = 4.dp)
+        ) {
+            items(
+                items = songs,
+                key = { "added-${it.id}" }
+            ) { song ->
+                HomeTrackCard(
+                    title = song.title,
+                    subtitle = song.artist,
+                    coverFile = coverRepository.coverFile(song.path),
+                    onClick = { /* TODO: reproducir */ }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun PlaylistsSection() {
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        HomeSectionHeader(
+            title = stringResource(R.string.home_playlists),
+            showSeeAll = true,
+            onSeeAllClick = { /* TODO: navegar a playlists */ }
+        )
+        // Grid manual 2 columnas (evita LazyVerticalGrid anidado en LazyColumn)
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            repeat(2) { rowIndex ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    repeat(2) { colIndex ->
+                        val index = rowIndex * 2 + colIndex
+                        PlaylistCard(
+                            title = "Playlist ${index + 1}",
+                            countText = stringResource(R.string.home_songs_count, 0),
+                            coverFiles = emptyList(),
+                            modifier = Modifier.weight(1f),
+                            onClick = { /* TODO: navegar */ }
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun AlbumsSection(
+    albums: List<HomeAlbumData>,
+    coverRepository: com.openplayer.music.data.media.CoverRepository
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        HomeSectionHeader(
+            title = stringResource(R.string.home_albums),
+            showSeeAll = true,
+            onSeeAllClick = { /* TODO: navegar a álbumes */ }
+        )
+        LazyRow(
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            contentPadding = PaddingValues(end = 4.dp)
+        ) {
+            items(
+                items = albums,
+                key = { "album-${it.title}|${it.artist}" }
+            ) { album ->
+                HomeAlbumCard(
+                    title = album.title,
+                    artist = album.artist,
+                    coverFile = album.coverPath?.let { coverRepository.coverFile(it) },
+                    onClick = { /* TODO: navegar a detalle álbum */ }
+                )
+            }
+        }
     }
 }
 
