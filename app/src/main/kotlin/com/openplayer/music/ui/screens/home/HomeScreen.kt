@@ -1,12 +1,10 @@
 package com.openplayer.music.ui.screens.home
 
-import android.text.format.DateFormat
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -45,29 +43,20 @@ import com.openplayer.music.ui.theme.LocalTracksCountTextColor
 import java.util.Calendar
 
 /**
- * Pantalla de inicio de OpenPlayer (rediseño v2).
+ * Pantalla de inicio de OpenPlayer (rediseño basado en mockup HTML).
  *
  * Muestra un resumen vivo de la actividad musical del usuario con
  * secciones jerárquicas:
  *
- * 1. **Saludo personalizado** según la hora del día.
- * 2. **Seguir escuchando**: card con la última canción reproducida.
- * 3. **Tu actividad**: panel de estadísticas agregadas.
- * 4. **Reproducir todo aleatoriamente**: botón grande con contador.
- * 5. **Escuchado recientemente**: fila horizontal de canciones.
- * 6. **Tus artistas**: fila horizontal de artistas con avatar circular.
- * 7. **Agregado recientemente**: fila horizontal de canciones recientes.
- * 8. **Playlists**: grid 2 columnas de playlists con mosaicos.
- * 9. **Álbumes**: fila horizontal de álbumes recientes.
- *
- * ## Saludo según hora del día
- * - Madrugada/noche (20:00-04:59): "Buenas noches"
- * - Mañana (05:00-11:59): "Buenos días"
- * - Tarde (12:00-19:59): "Buenas tardes"
- *
- * ## Atribución de Deezer
- * La atribución exigida por los términos de uso de Deezer se mantiene
- * en la esquina superior izquierda óptica.
+ * 1. **Saludo personalizado** según la hora del día
+ * 2. **Seguir escuchando**: card con la última canción reproducida
+ * 3. **Tu actividad**: panel de estadísticas agregadas
+ * 4. **Reproducir todo aleatoriamente**: botón grande con contador
+ * 5. **Escuchado recientemente**: fila horizontal de canciones
+ * 6. **Tus artistas**: fila horizontal de artistas con avatar circular
+ * 7. **Agregado recientemente**: fila horizontal de canciones recientes
+ * 8. **Playlists**: grid 2 columnas de playlists con mosaicos
+ * 9. **Álbumes**: fila horizontal de álbumes recientes
  *
  * @param audioRepository Repositorio de audio para obtener canciones y álbumes.
  * @param playbackHistoryRepository Repositorio de historial de reproducción.
@@ -144,9 +133,7 @@ fun HomeScreen(
     }
 
     // Tiempo formateado para el panel de estadísticas
-    val formattedTime = remember(totalStats.totalPlayedMs) {
-        formatPlayedTime(totalStats.totalPlayedMs)
-    }
+    val formattedTime = formatPlayedTime(totalStats.totalPlayedMs)
 
     // Strings localizados
     val statsTitle = stringResource(R.string.home_total_plays)
@@ -184,40 +171,23 @@ fun HomeScreen(
             // ── Seguir escuchando ──
             if (resumeSong != null) {
                 item(key = "resume_section") {
-                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        HomeSectionHeader(
-                            title = stringResource(R.string.home_resume_section),
-                            showSeeAll = false
-                        )
-                        ResumeCard(
-                            title = resumeSong.title,
-                            artist = resumeSong.artist,
-                            context = stringResource(R.string.home_resume_playing_from),
-                            coverFile = coverRepository.coverFile(resumeSong.path),
-                            onPlayClick = { /* TODO: reproducir */ },
-                            onCardClick = { /* TODO: navegar */ }
-                        )
-                    }
+                    ResumeSection(
+                        song = resumeSong,
+                        coverRepository = coverRepository
+                    )
                 }
             }
 
             // ── Tu actividad ──
             if (totalStats.totalPlays > 0) {
                 item(key = "stats_section") {
-                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        HomeSectionHeader(
-                            title = stringResource(R.string.home_your_activity),
-                            showSeeAll = true,
-                            onSeeAllClick = { /* TODO: navegar a stats */ }
-                        )
-                        StatsPanel(
-                            stats = totalStats,
-                            formattedTime = formattedTime,
-                            totalPlaysLabel = statsTitle,
-                            completedLabel = completedLabel,
-                            timeLabel = timeLabel
-                        )
-                    }
+                    StatsSection(
+                        stats = totalStats,
+                        formattedTime = formattedTime,
+                        statsTitle = statsTitle,
+                        completedLabel = completedLabel,
+                        timeLabel = timeLabel
+                    )
                 }
             }
 
@@ -304,6 +274,55 @@ fun HomeScreen(
             modifier = Modifier
                 .align(Alignment.TopStart)
                 .padding(start = 20.dp, top = 8.dp)
+        )
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SECCIONES HELPER
+// ─────────────────────────────────────────────────────────────────────────────
+
+@Composable
+private fun ResumeSection(
+    song: Song,
+    coverRepository: com.openplayer.music.data.media.CoverRepository
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        HomeSectionHeader(
+            title = stringResource(R.string.home_resume_section),
+            showSeeAll = false
+        )
+        ResumeCard(
+            title = song.title,
+            artist = song.artist,
+            context = stringResource(R.string.home_resume_playing_from),
+            coverFile = coverRepository.coverFile(song.path),
+            onPlayClick = { /* TODO: reproducir */ },
+            onCardClick = { /* TODO: navegar */ }
+        )
+    }
+}
+
+@Composable
+private fun StatsSection(
+    stats: TotalStats,
+    formattedTime: String,
+    statsTitle: String,
+    completedLabel: String,
+    timeLabel: String
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        HomeSectionHeader(
+            title = stringResource(R.string.home_your_activity),
+            showSeeAll = true,
+            onSeeAllClick = { /* TODO: navegar a stats */ }
+        )
+        StatsPanel(
+            stats = stats,
+            formattedTime = formattedTime,
+            totalPlaysLabel = statsTitle,
+            completedLabel = completedLabel,
+            timeLabel = timeLabel
         )
     }
 }
@@ -406,10 +425,10 @@ private fun PlaylistsSection() {
             showSeeAll = true,
             onSeeAllClick = { /* TODO: navegar a playlists */ }
         )
-        // Grid manual 2 columnas (evita LazyVerticalGrid anidado en LazyColumn)
+        // Grid manual 2x2 (evita LazyVerticalGrid anidado en LazyColumn)
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             // Fila 1
-            Row(
+            androidx.compose.foundation.layout.Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
@@ -429,7 +448,7 @@ private fun PlaylistsSection() {
                 )
             }
             // Fila 2
-            Row(
+            androidx.compose.foundation.layout.Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
@@ -481,6 +500,10 @@ private fun AlbumsSection(
         }
     }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// FUNCIONES UTILITARIAS
+// ─────────────────────────────────────────────────────────────────────────────
 
 /**
  * Genera el saludo según la hora del día (HOUR_OF_DAY, 0-23).
