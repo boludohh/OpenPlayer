@@ -66,4 +66,15 @@
     <string name="album_year_tracks">%1$d · %2$d مقطوعات</string>
     <string name="album_tracks_count">%1$d مقطوعات</string>
     <string name="artist_images_attribution">صور الفنانين بواسطة Deezer. المحتوى للاستخدام الخاص والعائلي.</string>
+    <string name="home_resume_section">متابعة الاستماع</string>
+    <string name="home_resume_playing_from">يتم التشغيل من</string>
+    <string name="home_your_activity">نشاطك</string>
+    <string name="home_shuffle_all">تشغيل عشوائي للكل</string>
+    <string name="home_shuffle_count">%1$d أغاني</string>
+    <string name="home_recently_added">أضيف مؤخراً</string>
+    <string name="home_your_artists">فنانيك</string>
+    <string name="home_playlists">قوائم التشغيل</string>
+    <string name="home_albums">الألبومات</string>
+    <string name="home_songs_count">%1$d أغاني</string>
+    <string name="home_see_all">عرض الكل</string>
 </resources>

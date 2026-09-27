@@ -66,4 +66,15 @@
     <string name="album_year_tracks">%1$d · %2$d tracks</string>
     <string name="album_tracks_count">%1$d tracks</string>
     <string name="artist_images_attribution">Artist images by Deezer. Content for private and family use.</string>
+    <string name="home_resume_section">Continue listening</string>
+    <string name="home_resume_playing_from">Playing from</string>
+    <string name="home_your_activity">Your activity</string>
+    <string name="home_shuffle_all">Shuffle all</string>
+    <string name="home_shuffle_count">%1$d songs</string>
+    <string name="home_recently_added">Recently added</string>
+    <string name="home_your_artists">Your artists</string>
+    <string name="home_playlists">Playlists</string>
+    <string name="home_albums">Albums</string>
+    <string name="home_songs_count">%1$d songs</string>
+    <string name="home_see_all">See all</string>
 </resources>
