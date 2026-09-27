@@ -64,7 +64,7 @@ fun StatsPanel(
     ) {
         // Stat 1: Reproducciones totales
         StatColumn(
-            iconRes = R.drawable.ic_home_stat_play,
+            iconRes = R.drawable.ic_play_arrow,
             value = formatStatNumber(stats.totalPlays),
             label = totalPlaysLabel,
             surfaceL2 = surfaceL2,
@@ -84,7 +84,7 @@ fun StatsPanel(
 
         // Stat 2: Completadas
         StatColumn(
-            iconRes = R.drawable.ic_home_stat_check,
+            iconRes = R.drawable.ic_check,
             value = formatStatNumber(stats.totalCompleted),
             label = completedLabel,
             surfaceL2 = surfaceL2,
@@ -104,7 +104,7 @@ fun StatsPanel(
 
         // Stat 3: Tiempo
         StatColumn(
-            iconRes = R.drawable.ic_home_stat_clock,
+            iconRes = R.drawable.ic_schedule,
             value = formattedTime,
             label = timeLabel,
             surfaceL2 = surfaceL2,

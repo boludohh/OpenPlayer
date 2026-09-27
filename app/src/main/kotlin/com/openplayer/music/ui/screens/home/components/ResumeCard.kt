@@ -149,7 +149,7 @@ fun ResumeCard(
             contentAlignment = Alignment.Center
         ) {
             Icon(
-                painter = painterResource(id = R.drawable.ic_home_play),
+                painter = painterResource(id = R.drawable.ic_play_arrow),
                 contentDescription = null,
                 tint = functionalIconColor,
                 modifier = Modifier.size(18.dp)

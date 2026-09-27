@@ -65,7 +65,7 @@ fun HomeSectionHeader(
                     fontWeight = FontWeight.SemiBold
                 )
                 Icon(
-                    painter = painterResource(id = R.drawable.ic_home_chevron_right),
+                    painter = painterResource(id = R.drawable.ic_chevron_right),
                     contentDescription = null,
                     tint = iconColor,
                     modifier = Modifier.size(14.dp)

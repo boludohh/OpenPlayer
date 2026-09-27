@@ -70,7 +70,7 @@ fun ShuffleAllButton(
             contentAlignment = Alignment.Center
         ) {
             Icon(
-                painter = painterResource(id = R.drawable.ic_home_shuffle),
+                painter = painterResource(id = R.drawable.ic_shuffle),
                 contentDescription = null,
                 tint = functionalIconColor,
                 modifier = Modifier.size(17.dp)
