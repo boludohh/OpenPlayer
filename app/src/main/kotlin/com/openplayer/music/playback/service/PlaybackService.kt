@@ -60,9 +60,10 @@ import kotlinx.coroutines.withContext
  *   y playedMs en tiempo real.
  * - **Tracking en tiempo real**: polling cada 1 segundo mientras
  *   suena música para acumular playedMs sin esperar al flush de sesión.
- * - **Detección de reproducción completa**: valida que la canción se
- *   escuchó al menos el 90% de su duración antes de contar como
- *   completada, evitando contar seeks al final.
+ * - **Detección de reproducción completa**: usa [Player.Listener.onMediaItemTransition]
+ *   con el parámetro `reason` para distinguir entre fin natural
+ *   (reason = AUTO/REPEAT) y seeks/cambios manuales. Solo cuenta como
+ *   completada si se escuchó al menos el 90% de la canción.
  *
  * ## Optimizaciones de rendimiento
  * - El mapeo de canciones a MediaItems se ejecuta en `Dispatchers.IO`
@@ -114,6 +115,20 @@ class PlaybackService : MediaLibraryService() {
      * lastTrackedPositionMs y maxPositionReachedMs.
      */
     private var currentTrackedSongId: Long? = null
+
+    /**
+     * ID de la canción que estaba sonando antes del último cambio.
+     * Se usa en [Player.Listener.onMediaItemTransition] para verificar
+     * si la canción anterior debe contar como completada.
+     */
+    private var previousMediaId: Long? = null
+
+    /**
+     * Duración de la canción anterior (la que terminó justo antes del
+     * último transition). Se usa junto con [maxPositionReachedMs] para
+     * validar el umbral del 90% de completado.
+     */
+    private var previousDurationMs: Long = 0L
 
     /**
      * Repositorio de portadas para construir MediaItems.
@@ -201,24 +216,51 @@ class PlaybackService : MediaLibraryService() {
         }
 
         override fun onMediaItemTransition(mediaItem: androidx.media3.common.MediaItem?, reason: Int) {
-            // Al cambiar de canción: flush sesión anterior + inicio de nueva
             player?.let { p ->
-                val previousPosition = p.currentPosition
-                val previousMediaId = mediaItem?.mediaId?.toLongOrNull()
-
-                // Flush sesión anterior (si había una)
-                if (previousMediaId != null) {
-                    serviceScope.launch {
-                        playbackHistoryRepository.flushSession(previousPosition)
+                // ── Verificar si la canción ANTERIOR debe contar como completada ──
+                // Solo cuenta si el transition fue por fin natural (AUTO/REPEAT),
+                // NO si fue por seek manual o cambio de playlist.
+                // BassPlayerAdapter no dispara STATE_ENDED entre canciones
+                // (solo al final de la cola), por eso usamos este callback.
+                if (previousMediaId != null &&
+                    (reason == Player.MEDIA_ITEM_TRANSITION_REASON_AUTO ||
+                     reason == Player.MEDIA_ITEM_TRANSITION_REASON_REPEAT)
+                ) {
+                    val completionThreshold = if (previousDurationMs > 0) {
+                        (previousDurationMs * COMPLETION_THRESHOLD_RATIO).toLong()
+                    } else {
+                        0L
+                    }
+                    // maxPositionReachedMs tiene la posición más alta de la canción
+                    // que acaba de terminar (se acumuló durante el tracking)
+                    if (maxPositionReachedMs >= completionThreshold && previousDurationMs > 0) {
+                        val songIdToComplete = previousMediaId!!
+                        serviceScope.launch {
+                            playbackHistoryRepository.recordCompleted(songIdToComplete)
+                        }
                     }
                 }
+
+                // ── Flush de sesión anterior (playedMs restante) ──
+                // Usamos previousMediaId porque p.currentMediaItem YA es la nueva canción
+                if (previousMediaId != null) {
+                    val finalPosition = maxPositionReachedMs
+                    serviceScope.launch {
+                        playbackHistoryRepository.flushSession(finalPosition)
+                    }
+                }
+
+                // ── Preparar estado para la nueva canción ──
+                // Guardar info de la nueva canción (será la "anterior" cuando cambie)
+                previousMediaId = mediaItem?.mediaId?.toLongOrNull()
+                previousDurationMs = p.duration.takeIf { it > 0 } ?: 0L
 
                 // Reiniciar tracking state para la nueva canción
                 lastTrackedPositionMs = 0L
                 maxPositionReachedMs = 0L
                 currentTrackedSongId = null
 
-                // Inicio de nueva sesión (si hay nueva canción)
+                // ── Inicio de nueva sesión ──
                 val newMediaId = mediaItem?.mediaId?.toLongOrNull()
                 if (newMediaId != null) {
                     serviceScope.launch {
@@ -229,19 +271,21 @@ class PlaybackService : MediaLibraryService() {
         }
 
         override fun onPlaybackStateChanged(playbackState: Int) {
-            // STATE_ENDED: canción terminó completamente
+            // STATE_ENDED: solo se dispara cuando termina la ÚLTIMA canción
+            // de la cola (BassPlayerAdapter no lo pone entre canciones por gapless).
+            // Sirve como respaldo para ese caso edge.
             if (playbackState == Player.STATE_ENDED) {
                 player?.let { p ->
                     val currentPosition = p.currentPosition
-                    val duration = p.duration
+                    val duration = p.duration.takeIf { it > 0 } ?: previousDurationMs
                     val mediaId = p.currentMediaItem?.mediaId?.toLongOrNull()
+                        ?: previousMediaId
                     if (mediaId != null) {
                         serviceScope.launch {
                             // Flush final de playedMs
                             playbackHistoryRepository.flushSession(currentPosition)
 
-                            // Solo contar como completada si se escuchó al menos
-                            // el 90% de la canción (detecta seeks al final)
+                            // Verificar umbral de completado (90% de la canción)
                             val completionThreshold = if (duration > 0) {
                                 (duration * COMPLETION_THRESHOLD_RATIO).toLong()
                             } else {
@@ -257,6 +301,8 @@ class PlaybackService : MediaLibraryService() {
                     lastTrackedPositionMs = 0L
                     maxPositionReachedMs = 0L
                     currentTrackedSongId = null
+                    previousMediaId = null
+                    previousDurationMs = 0L
                 }
             }
         }
@@ -298,7 +344,7 @@ class PlaybackService : MediaLibraryService() {
      * - Si el delta está en rango razonable (1ms a 5000ms), se acumula.
      *
      * También actualiza maxPositionReachedMs para la detección de
-     * reproducción completa en STATE_ENDED.
+     * reproducción completa cuando la canción termine.
      */
     private suspend fun tickTracking() {
         val p = player ?: return
@@ -318,6 +364,13 @@ class PlaybackService : MediaLibraryService() {
         // Actualizar máxima posición alcanzada (para detectar seeks al final)
         if (currentPosition > maxPositionReachedMs) {
             maxPositionReachedMs = currentPosition
+        }
+
+        // También actualizar previousDurationMs si el player ahora la conoce
+        // (a veces BASS tarda unos ms en reportar la duración correcta)
+        val knownDuration = p.duration
+        if (knownDuration > 0 && previousDurationMs <= 0) {
+            previousDurationMs = knownDuration
         }
 
         // Calcular delta y acumular si es razonable
