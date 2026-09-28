@@ -65,7 +65,7 @@ private val CircleToNameSpacing = 6.dp
  * El placeholder reutiliza los mismos colores que los placeholders de
  * carátulas de pistas: fondo `surfaceVariant` e icono con
  * [LocalCoverPlaceholderIconColor], manteniendo consistencia visual
- * en los 3 temas (Claro / Oscuro / AMOLED).
+ * en ambos temas (Claro / Oscuro).
  *
  * @param artistName Nombre del artista a mostrar debajo del círculo.
  * @param imageFile Archivo de imagen en disco resuelto por

@@ -104,8 +104,8 @@ private fun maxDistance(point: Offset, size: Size): Float {
  * Host de cambio de tema con animación circular estilo Telegram.
  *
  * Comportamiento:
- * - Cada pulsación inicia una animación circular que revela el siguiente
- *   tema del ciclo desde el punto de origen.
+ * - Cada pulsación inicia una animación circular que revela el tema
+ *   opuesto (Claro ↔ Oscuro) desde el punto de origen.
  * - Durante la animación, los toques en el botón de tema se ignoran
  *   (el usuario debe esperar a que la animación termine).
  * - Si una pulsación nueva interrumpe la animación antes de cubrir toda la
@@ -134,11 +134,11 @@ private fun maxDistance(point: Offset, size: Size): Float {
  *   de estado y navegación (isAppearanceLightStatusBars e
  *   isAppearanceLightNavigationBars) según el tema activo:
  *   - Tema claro: iconos oscuros (gris fuerte) sobre fondo transparente.
- *   - Tema oscuro/AMOLED: iconos claros (blancos) sobre fondo transparente.
+ *   - Tema oscuro: iconos claros (blancos) sobre fondo transparente.
  * - Esto garantiza que los iconos del sistema siempre sean visibles
  *   independientemente del tema seleccionado.
  *
- * @param currentTheme tema activo (Claro, Oscuro o AMOLED).
+ * @param currentTheme tema activo (Claro u Oscuro).
  * @param currentLanguage código de idioma guardado por el usuario.
  * @param systemIsDark indica si el sistema está en modo oscuro.
  * @param onThemeCommitted callback que se invoca cuando la animación
@@ -210,7 +210,7 @@ fun ThemeSwitcherHost(
     }
 
     // Actualiza dinámicamente la apariencia de las barras del sistema
-    // (iconos oscuros en tema claro, iconos claros en tema oscuro/AMOLED)
+    // (iconos oscuros en tema claro, iconos claros en tema oscuro)
     // cada vez que cambia el tema activo.
     LaunchedEffect(currentTheme) {
         activity?.let { act ->
@@ -284,10 +284,9 @@ fun ThemeSwitcherHost(
  * - Los toques se ignoran mientras la animación está en curso (el
  *   usuario debe esperar a que termine antes de volver a tocar).
  *
- * El color del icono es único en los 3 temas: MaterialTheme.colorScheme
+ * El color del icono es único en los 2 temas: MaterialTheme.colorScheme
  * .onSurface (que se mapea al token highContrast del sistema de colores).
- * Esto elimina la necesidad de colores específicos por tema
- * (LightSunIconColor/DarkMoonIconColor/AmoledMoonIconColor eliminados).
+ * Esto elimina la necesidad de colores específicos por tema.
  *
  * - [enabled]: controla si el botón responde a clicks. Útil cuando el
  *   botón está desvaneciéndose con el scroll y no debe ser interactuable
@@ -332,8 +331,7 @@ fun ThemeToggleButton(
             )
         }
     ) {
-        // Color único en los 3 temas: onSurface = highContrast.
-        // Ya no hay colores específicos por tema para sol/luna.
+        // Color único en los 2 temas: onSurface = highContrast.
         val iconColor = MaterialTheme.colorScheme.onSurface
 
         // Crossfade suave entre iconos según el tema mostrado.
@@ -342,9 +340,8 @@ fun ThemeToggleButton(
             animationSpec = tween(durationMillis = 200)
         ) { theme ->
             val iconRes = when (theme) {
-                ThemeMode.LIGHT -> R.drawable.ic_sun
-                ThemeMode.DARK -> R.drawable.ic_moon
-                ThemeMode.AMOLED -> R.drawable.ic_moon_amoled
+                ThemeMode.LIGHT -> R.drawable.ic_sun_light
+                ThemeMode.DARK -> R.drawable.ic_moon_dark
             }
 
             Icon(

@@ -126,15 +126,14 @@ private const val finishButtonAnimDuration = 300
  *   mediante rememberSaveable con ScrollState.Saver, evitando que el
  *   contenido suba al primer título tras el cambio.
  * - El fondo usa el color semántico del tema para que cambie al
- *   alternar entre claro/oscuro/AMOLED.
+ *   alternar entre claro y oscuro.
  *
  * Los títulos de sección y el icono del escudo usan inverseOnSurface
- * (#5A1A1A claro, #F5F5F5 oscuro, #E5E5E5 AMOLED). Los subtítulos y
- * cuerpos de las tarjetas usan onSurfaceVariant (#525252 / #B3B3B3 /
- * #A3A3A3). La cápsula "Finalizar" se adapta automáticamente al tema
- * mediante los slots semánticos del colorScheme (surfaceVariant, scrim,
- * inverseOnSurface), por lo que esta pantalla no necesita recibir el
- * tema activo como parámetro.
+ * (#1C1B1F claro, #E6E1E5 oscuro). Los subtítulos y cuerpos de las
+ * tarjetas usan onSurfaceVariant. La cápsula "Finalizar" se adapta
+ * automáticamente al tema mediante los slots semánticos del colorScheme
+ * (surfaceVariant, scrim, inverseOnSurface), por lo que esta pantalla
+ * no necesita recibir el tema activo como parámetro.
  */
 @Composable
 fun SetupScreen(

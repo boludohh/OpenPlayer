@@ -109,14 +109,14 @@ private val CurrentTrackBorderCorner = 12.dp
  * - Línea vertical derecha a 4dp ópticos del glifo more vert.
  * - Líneas superior e inferior en el límite del contenedor (64dp),
  *   sin sobrepasarlo ni invadir las filas contiguas.
- * El color proviene de [LocalCurrentTrackBorderColor] (#1A1A1A
- * claro, #F5F5F5 oscuro, #E5E5E5 AMOLED). El contenedor real NO se
- * modifica: sigue siendo 64dp de alto y ancho completo, y su fondo
- * permanece con el color de fondo del tema (el antiguo fondo de
- * color del indicador se eliminó por ser un indicador genérico).
- * El indicador se actualiza reactivamente según el estado del
- * reproductor (no según taps del usuario), por lo que tocar
- * repetidamente la misma pista no causa parpadeo.
+ * El color proviene de [LocalCurrentTrackBorderColor] (#1C1B1F
+ * claro, #E6E1E5 oscuro). El contenedor real NO se modifica: sigue
+ * siendo 64dp de alto y ancho completo, y su fondo permanece con el
+ * color de fondo del tema (el antiguo fondo de color del indicador
+ * se eliminó por ser un indicador genérico). El indicador se
+ * actualiza reactivamente según el estado del reproductor (no según
+ * taps del usuario), por lo que tocar repetidamente la misma pista
+ * no causa parpadeo.
  *
  * ## Sin ripple de Material
  * El efecto de onda (ripple) al tocar está deshabilitado en toda

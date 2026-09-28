@@ -68,7 +68,7 @@ import androidx.core.view.WindowCompat
  *
  * Apariencia de las barras del sistema:
  * - La apariencia de los iconos de las barras (oscuros para tema claro, claros
- *   para tema oscuro/AMOLED) se gestiona dinámicamente en ThemeSwitcherHost
+ *   para tema oscuro) se gestiona dinámicamente en ThemeSwitcherHost
  *   mediante WindowInsetsControllerCompat, no en esta función.
  * - Esto permite que la apariencia se actualice automáticamente cuando el
  *   usuario cambia de tema sin necesidad de recrear la Activity.

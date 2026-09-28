@@ -9,6 +9,11 @@ import androidx.compose.ui.graphics.Color
 // Diseño basado en jerarquía de superficies + bordes + contenido por
 // contexto, con cero duplicados de valores hex entre temas.
 //
+// OpenPlayer soporta 2 temas:
+// - LIGHT: fondo blanco (#FFFFFF), ideal para uso diurno.
+// - DARK: fondo negro puro (#000000), ideal para uso nocturno y
+//   pantallas AMOLED (apaga píxeles individuales, ahorrando batería).
+//
 // Tokens principales:
 // - background: fondo principal de toda la pantalla
 // - cardL1: superficie elevada nivel 1 (filas, tarjetas principales)
@@ -25,7 +30,7 @@ import androidx.compose.ui.graphics.Color
 //   coverPlaceholderIcon)
 // - error/success/warning familias: colores semánticos con sus 4
 //   variantes (color, on-color, container, on-container)
-// - scrim: overlay oscuro para modales (#000000 @32% en los 3 temas)
+// - scrim: overlay oscuro para modales (#000000 @32% en ambos temas)
 //
 // Mapeo a Material3 slots (ver Theme.kt):
 // - primary / onPrimary → highContrast / background (sin acento propio,
@@ -61,53 +66,27 @@ val LightOnWarningContainer = Color(0xFF271900)
 val LightScrim = Color(0x52000000)
 
 // =========================================================================
-// Tema Oscuro
+// Tema Oscuro (negro puro, optimizado para pantallas AMOLED)
 // =========================================================================
 
-val DarkBackground = Color(0xFF121212)
-val DarkCardL1 = Color(0xFF1E1E1E)
-val DarkCardL2 = Color(0xFF282828)
-val DarkBorderL1 = Color(0xFF303030)
-val DarkBorderL2 = Color(0xFF383838)
+val DarkBackground = Color(0xFF000000)
+val DarkCardL1 = Color(0xFF121212)
+val DarkCardL2 = Color(0xFF1C1C1C)
+val DarkBorderL1 = Color(0xFF2A2A2A)
+val DarkBorderL2 = Color(0xFF333333)
 val DarkHighContrast = Color(0xFFE6E1E5)
-val DarkSecondaryOnBg = Color(0xFF98969C)
-val DarkInactiveOnBg = Color(0xFF949198)
+val DarkSecondaryOnBg = Color(0xFF9A979E)
+val DarkInactiveOnBg = Color(0xFF948F96)
 val DarkError = Color(0xFFFFB4AB)
 val DarkOnError = Color(0xFF690005)
-val DarkErrorContainer = Color(0xFF93000A)
+val DarkErrorContainer = Color(0xFF7A0006)
 val DarkOnErrorContainer = Color(0xFFFFDAD6)
 val DarkSuccess = Color(0xFF8FDA9C)
 val DarkOnSuccess = Color(0xFF00390F)
-val DarkSuccessContainer = Color(0xFF14531F)
+val DarkSuccessContainer = Color(0xFF0E4517)
 val DarkOnSuccessContainer = Color(0xFFC3F2CB)
 val DarkWarning = Color(0xFFF6BE3F)
 val DarkOnWarning = Color(0xFF3F2E00)
-val DarkWarningContainer = Color(0xFF5C4300)
+val DarkWarningContainer = Color(0xFF4C3800)
 val DarkOnWarningContainer = Color(0xFFFFDF9B)
 val DarkScrim = Color(0x52000000)
-
-// =========================================================================
-// Tema AMOLED (negro puro)
-// =========================================================================
-
-val AmoledBackground = Color(0xFF000000)
-val AmoledCardL1 = Color(0xFF121212)
-val AmoledCardL2 = Color(0xFF1C1C1C)
-val AmoledBorderL1 = Color(0xFF2A2A2A)
-val AmoledBorderL2 = Color(0xFF333333)
-val AmoledHighContrast = Color(0xFFE6E1E5)
-val AmoledSecondaryOnBg = Color(0xFF9A979E)
-val AmoledInactiveOnBg = Color(0xFF948F96)
-val AmoledError = Color(0xFFFFB4AB)
-val AmoledOnError = Color(0xFF690005)
-val AmoledErrorContainer = Color(0xFF7A0006)
-val AmoledOnErrorContainer = Color(0xFFFFDAD6)
-val AmoledSuccess = Color(0xFF8FDA9C)
-val AmoledOnSuccess = Color(0xFF00390F)
-val AmoledSuccessContainer = Color(0xFF0E4517)
-val AmoledOnSuccessContainer = Color(0xFFC3F2CB)
-val AmoledWarning = Color(0xFFF6BE3F)
-val AmoledOnWarning = Color(0xFF3F2E00)
-val AmoledWarningContainer = Color(0xFF4C3800)
-val AmoledOnWarningContainer = Color(0xFFFFDF9B)
-val AmoledScrim = Color(0x52000000)

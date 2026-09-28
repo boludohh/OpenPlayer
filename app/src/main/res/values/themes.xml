@@ -7,7 +7,7 @@
     <!-- Tema exclusivo para SplashActivity.
          windowBackground blanco (#FFFFFF) coincide con LightBackground,
          eliminando el parpadeo blanco antes de que onCreate() esté listo.
-         En modo oscuro/AMOLED se usa la variante de values-night/. -->
+         En modo oscuro se usa la variante de values-night/. -->
     <style name="Theme.Splash" parent="Theme.ComposeEmptyActivity">
         <item name="android:windowBackground">#FFFFFFFF</item>
     </style>

@@ -17,8 +17,8 @@ import androidx.compose.ui.text.font.FontFamily
 // el tema activo sin necesidad de pasar parámetros a cada componente.
 //
 // Los nombres de los Locals se mantienen por compatibilidad con el código
-// existente; internamente ahora apuntan a los tokens base del nuevo
-// sistema (sin duplicados de valores hex):
+// existente; internamente apuntan a los tokens base del sistema
+// (sin duplicados de valores hex):
 // - LocalFloatingIconColor → secondaryOnBg
 // - LocalNavIconActiveColor → highContrast
 // - LocalNavIconInactiveColor → inactiveOnBg
@@ -31,8 +31,8 @@ import androidx.compose.ui.text.font.FontFamily
 // - LocalCoverPlaceholderIconColor → inactiveOnBg
 // - LocalCurrentTrackColor → cardL1
 // - LocalCurrentTrackBorderColor → highContrast
-// - LocalCardL2Color → cardL2 (NUEVO: libera scrim de uso atípico)
-// - LocalActiveBorderColor → highContrast (NUEVO: borde de selección activa)
+// - LocalCardL2Color → cardL2
+// - LocalActiveBorderColor → highContrast (borde de selección activa)
 
 /**
  * Color custom para los iconos flotantes de la pantalla de bienvenida.
@@ -101,7 +101,7 @@ val LocalCurrentTrackColor = compositionLocalOf { Color.Gray }
 val LocalCurrentTrackBorderColor = compositionLocalOf { Color.Black }
 
 /**
- * NUEVO: Color de superficie elevada nivel 2 (elementos anidados dentro
+ * Color de superficie elevada nivel 2 (elementos anidados dentro
  * de una Card Nivel 1: círculos de iconos, chips, sub-paneles).
  *
  * Se introduce para liberar a `colorScheme.scrim` de su uso atípico
@@ -112,7 +112,7 @@ val LocalCurrentTrackBorderColor = compositionLocalOf { Color.Black }
 val LocalCardL2Color = compositionLocalOf { Color.Gray }
 
 /**
- * NUEVO: Color de borde de estado activo (selección, pista actual,
+ * Color de borde de estado activo (selección, pista actual,
  * opción marcada). Apunta a highContrast (máximo contraste funcional).
  *
  * Reservado idealmente para el color "primary" una vez definido;
@@ -202,37 +202,6 @@ private val DarkColors = darkColorScheme(
     inversePrimary = DarkBackground
 )
 
-private val AmoledColors = darkColorScheme(
-    primary = AmoledHighContrast,
-    onPrimary = AmoledBackground,
-    primaryContainer = AmoledCardL2,
-    onPrimaryContainer = AmoledHighContrast,
-    secondary = AmoledSecondaryOnBg,
-    onSecondary = AmoledBackground,
-    secondaryContainer = AmoledCardL2,
-    onSecondaryContainer = AmoledHighContrast,
-    tertiary = AmoledSuccess,
-    onTertiary = AmoledOnSuccess,
-    tertiaryContainer = AmoledSuccessContainer,
-    onTertiaryContainer = AmoledOnSuccessContainer,
-    error = AmoledError,
-    onError = AmoledOnError,
-    errorContainer = AmoledErrorContainer,
-    onErrorContainer = AmoledOnErrorContainer,
-    background = AmoledBackground,
-    onBackground = AmoledHighContrast,
-    surface = AmoledBackground,
-    onSurface = AmoledHighContrast,
-    surfaceVariant = AmoledCardL1,
-    onSurfaceVariant = AmoledSecondaryOnBg,
-    outline = AmoledBorderL1,
-    outlineVariant = AmoledBorderL2,
-    scrim = AmoledScrim,
-    inverseOnSurface = AmoledHighContrast,
-    inverseSurface = AmoledHighContrast,
-    inversePrimary = AmoledBackground
-)
-
 // =========================================================================
 // Tema principal de OpenPlayer
 // =========================================================================
@@ -240,7 +209,7 @@ private val AmoledColors = darkColorScheme(
 /**
  * Tema principal de OpenPlayer.
  *
- * Aplica uno de los tres esquemas de color (Claro, Oscuro o AMOLED)
+ * Aplica uno de los dos esquemas de color (Claro u Oscuro)
  * según el [themeMode] indicado. Los colores dinámicos del sistema
  * quedan deliberadamente desactivados: OpenPlayer siempre usa sus
  * propios colores definidos para cada tema.
@@ -250,7 +219,7 @@ private val AmoledColors = darkColorScheme(
  * el idioma activo (IBM Plex Sans o IBM Plex Sans Arabic).
  *
  * Provee CompositionLocals de colores semánticos (compatibles con
- * nombres existentes + nuevos LocalCardL2Color y LocalActiveBorderColor)
+ * nombres existentes + LocalCardL2Color y LocalActiveBorderColor)
  * para que los componentes accedan a colores según el tema sin pasar
  * parámetros.
  */
@@ -262,34 +231,28 @@ fun OpenPlayerTheme(
     val colorScheme = when (themeMode) {
         ThemeMode.LIGHT -> LightColors
         ThemeMode.DARK -> DarkColors
-        ThemeMode.AMOLED -> AmoledColors
     }
 
     // Tokens base por tema (única fuente de verdad)
     val highContrast = when (themeMode) {
         ThemeMode.LIGHT -> LightHighContrast
         ThemeMode.DARK -> DarkHighContrast
-        ThemeMode.AMOLED -> AmoledHighContrast
     }
     val secondaryOnBg = when (themeMode) {
         ThemeMode.LIGHT -> LightSecondaryOnBg
         ThemeMode.DARK -> DarkSecondaryOnBg
-        ThemeMode.AMOLED -> AmoledSecondaryOnBg
     }
     val inactiveOnBg = when (themeMode) {
         ThemeMode.LIGHT -> LightInactiveOnBg
         ThemeMode.DARK -> DarkInactiveOnBg
-        ThemeMode.AMOLED -> AmoledInactiveOnBg
     }
     val cardL1 = when (themeMode) {
         ThemeMode.LIGHT -> LightCardL1
         ThemeMode.DARK -> DarkCardL1
-        ThemeMode.AMOLED -> AmoledCardL1
     }
     val cardL2 = when (themeMode) {
         ThemeMode.LIGHT -> LightCardL2
         ThemeMode.DARK -> DarkCardL2
-        ThemeMode.AMOLED -> AmoledCardL2
     }
 
     // Construir tipografía usando la familia provista por LocalAppFontFamily

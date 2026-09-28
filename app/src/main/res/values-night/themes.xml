@@ -9,13 +9,12 @@
     </style>
 
     <!-- Variante oscura del tema de splash.
-         windowBackground #1C1B1F coincide exactamente con DarkBackground
+         windowBackground #000000 coincide exactamente con DarkBackground
          según el documento de colores de OpenPlayer (fondo principal del
-         tema Oscuro). Los usuarios en tema AMOLED verán un flash casi
-         imperceptible de #1C1B1F (~200ms) antes de que Compose pinte
-         #000000, priorizando la coherencia del tema Dark sobre el ahorro
-         de píxeles del AMOLED en el breve instante del splash. -->
+         tema Oscuro, negro puro optimizado para pantallas AMOLED).
+         La transición desde el splash al contenido principal de Compose
+         es completamente imperceptible al compartir el mismo color. -->
     <style name="Theme.Splash" parent="Theme.ComposeEmptyActivity">
-        <item name="android:windowBackground">#FF1C1B1F</item>
+        <item name="android:windowBackground">#FF000000</item>
     </style>
 </resources>
