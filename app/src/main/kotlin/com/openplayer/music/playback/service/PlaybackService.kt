@@ -56,14 +56,22 @@ import kotlinx.coroutines.withContext
  *   cuando cambian los datos, sin interrumpir la reproducción en curso.
  * - **Registro de historial de reproducción**: engancha eventos del
  *   player (inicio, pausa, seek, cambio de canción, fin natural) a
- *   [PlaybackHistoryRepository] para trackear playCount, completedCount
- *   y playedMs en tiempo real.
+ *   [PlaybackHistoryRepository] para trackear playCount y completedCount.
  * - **Tracking en tiempo real**: polling cada 1 segundo mientras
- *   suena música para acumular playedMs sin esperar al flush de sesión.
+ *   suena música para acumular playedMs en la BD. El tiempo se
+ *   actualiza segundo a segundo en la UI vía Flow reactivo.
  * - **Detección de reproducción completa**: usa [Player.Listener.onMediaItemTransition]
  *   con el parámetro `reason` para distinguir entre fin natural
  *   (reason = AUTO/REPEAT) y seeks/cambios manuales. Solo cuenta como
  *   completada si se escuchó al menos el 90% de la canción.
+ *
+ * ## Arquitectura de tracking
+ * El tiempo escuchado se acumula EXCLUSIVAMENTE mediante el polling
+ * de tracking ([tickTracking]) que corre cada 1 segundo. NO se usan
+ * flushes manuales al pausar/cambiar/terminar canción, ya que esto
+ * causaba doble conteo con el tracking en tiempo real. El único
+ * delta no cubierto al destruir el servicio es de máximo 1 segundo
+ * (la duración del último tick), que es despreciable.
  *
  * ## Optimizaciones de rendimiento
  * - El mapeo de canciones a MediaItems se ejecuta en `Dispatchers.IO`
@@ -202,16 +210,9 @@ class PlaybackService : MediaLibraryService() {
             } else {
                 abandonBassFocus()
                 stopTracking()
-                // Al pausar, flush de la sesión actual (acumular playedMs)
-                player?.let { p ->
-                    val currentPosition = p.currentPosition
-                    val mediaId = p.currentMediaItem?.mediaId?.toLongOrNull()
-                    if (mediaId != null) {
-                        serviceScope.launch {
-                            playbackHistoryRepository.flushSession(currentPosition)
-                        }
-                    }
-                }
+                // NO hacer flush aquí: el tracking en tiempo real ya acumuló
+                // el tiempo escuchado segundo a segundo. flushSession causaba
+                // doble conteo al sumar el delta completo una segunda vez.
             }
         }
 
@@ -241,14 +242,10 @@ class PlaybackService : MediaLibraryService() {
                     }
                 }
 
-                // ── Flush de sesión anterior (playedMs restante) ──
-                // Usamos previousMediaId porque p.currentMediaItem YA es la nueva canción
-                if (previousMediaId != null) {
-                    val finalPosition = maxPositionReachedMs
-                    serviceScope.launch {
-                        playbackHistoryRepository.flushSession(finalPosition)
-                    }
-                }
+                // NO hacer flush de sesión anterior aquí: el tracking en tiempo
+                // real ya acumuló todo el playedMs de la canción anterior segundo
+                // a segundo. flushSession causaba doble conteo (sumaba el delta
+                // completo de la canción anterior como si no se hubiera acumulado).
 
                 // ── Preparar estado para la nueva canción ──
                 // Guardar info de la nueva canción (será la "anterior" cuando cambie)
@@ -260,7 +257,7 @@ class PlaybackService : MediaLibraryService() {
                 maxPositionReachedMs = 0L
                 currentTrackedSongId = null
 
-                // ── Inicio de nueva sesión ──
+                // ── Inicio de nueva sesión (playCount +1) ──
                 val newMediaId = mediaItem?.mediaId?.toLongOrNull()
                 if (newMediaId != null) {
                     serviceScope.launch {
@@ -276,14 +273,12 @@ class PlaybackService : MediaLibraryService() {
             // Sirve como respaldo para ese caso edge.
             if (playbackState == Player.STATE_ENDED) {
                 player?.let { p ->
-                    val currentPosition = p.currentPosition
                     val duration = p.duration.takeIf { it > 0 } ?: previousDurationMs
                     val mediaId = p.currentMediaItem?.mediaId?.toLongOrNull()
                         ?: previousMediaId
                     if (mediaId != null) {
                         serviceScope.launch {
-                            // Flush final de playedMs
-                            playbackHistoryRepository.flushSession(currentPosition)
+                            // NO hacer flush: el tracking ya acumuló playedMs.
 
                             // Verificar umbral de completado (90% de la canción)
                             val completionThreshold = if (duration > 0) {
@@ -336,6 +331,10 @@ class PlaybackService : MediaLibraryService() {
     /**
      * Un tick del polling: lee la posición actual del player, calcula
      * el delta desde la última lectura y acumula playedMs en la BD.
+     *
+     * Este es el ÚNICO mecanismo de acumulación de playedMs en toda
+     * la app. Las llamadas anteriores a flushSession en pausas y
+     * transitions causaban doble conteo y fueron eliminadas.
      *
      * Lógica de delta:
      * - Si el delta es <= 0 (seek hacia atrás o pausa), no se acumula.
