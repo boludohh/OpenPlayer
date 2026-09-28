@@ -52,6 +52,8 @@ interface PlayStatsDao {
     /**
      * Añade deltaMs a playedMs.
      * Si la fila no existe, la crea con playedMs=deltaMs y el resto en 0.
+     *
+     * Uso: flush al pausar/cambiar/terminar canción (delta grande).
      */
     @Query(
         """
@@ -62,6 +64,24 @@ interface PlayStatsDao {
         """
     )
     suspend fun addPlayedMs(songId: Long, deltaMs: Long)
+
+    /**
+     * Acumula deltaMs a playedMs de forma incremental.
+     * Si la fila no existe, la crea con playedMs=deltaMs y el resto en 0.
+     *
+     * Uso: polling de tracking en tiempo real (delta pequeño, ej. 1000ms).
+     * Diferencia con [addPlayedMs]: semántica de "acumulación progresiva"
+     * para el polling de tracking que se ejecuta cada segundo.
+     */
+    @Query(
+        """
+        INSERT INTO play_stats (songId, playCount, completedCount, playedMs, lastPlayedAt)
+        VALUES (:songId, 0, 0, :deltaMs, 0)
+        ON CONFLICT(songId) DO UPDATE SET
+            playedMs = playedMs + :deltaMs
+        """
+    )
+    suspend fun accumulatePlayedMs(songId: Long, deltaMs: Long)
 
     /**
      * Estadísticas agregadas totales: suma de playCount, completedCount

@@ -26,6 +26,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -55,7 +57,12 @@ import kotlinx.coroutines.withContext
  * - **Registro de historial de reproducción**: engancha eventos del
  *   player (inicio, pausa, seek, cambio de canción, fin natural) a
  *   [PlaybackHistoryRepository] para trackear playCount, completedCount
- *   y playedMs.
+ *   y playedMs en tiempo real.
+ * - **Tracking en tiempo real**: polling cada 1 segundo mientras
+ *   suena música para acumular playedMs sin esperar al flush de sesión.
+ * - **Detección de reproducción completa**: valida que la canción se
+ *   escuchó al menos el 90% de su duración antes de contar como
+ *   completada, evitando contar seeks al final.
  *
  * ## Optimizaciones de rendimiento
  * - El mapeo de canciones a MediaItems se ejecuta en `Dispatchers.IO`
@@ -85,6 +92,28 @@ class PlaybackService : MediaLibraryService() {
 
     /** Job de la suscripción al Flow de canciones. */
     private var librarySubscriptionJob: Job? = null
+
+    /** Job del polling de tracking en tiempo real. */
+    private var trackingJob: Job? = null
+
+    /**
+     * Última posición leída en el polling de tracking. Usado para
+     * calcular el delta de milisegundos entre lecturas consecutivas.
+     */
+    private var lastTrackedPositionMs: Long = 0L
+
+    /**
+     * Máxima posición alcanzada en la canción actual. Usado para
+     * detectar si el usuario hizo seek al final (no cuenta como
+     * reproducción completada).
+     */
+    private var maxPositionReachedMs: Long = 0L
+
+    /**
+     * ID de la canción actualmente en tracking. Si cambia, se reinicia
+     * lastTrackedPositionMs y maxPositionReachedMs.
+     */
+    private var currentTrackedSongId: Long? = null
 
     /**
      * Repositorio de portadas para construir MediaItems.
@@ -154,8 +183,10 @@ class PlaybackService : MediaLibraryService() {
         override fun onIsPlayingChanged(isPlaying: Boolean) {
             if (isPlaying) {
                 requestBassFocus()
+                startTracking()
             } else {
                 abandonBassFocus()
+                stopTracking()
                 // Al pausar, flush de la sesión actual (acumular playedMs)
                 player?.let { p ->
                     val currentPosition = p.currentPosition
@@ -174,13 +205,18 @@ class PlaybackService : MediaLibraryService() {
             player?.let { p ->
                 val previousPosition = p.currentPosition
                 val previousMediaId = mediaItem?.mediaId?.toLongOrNull()
-                
+
                 // Flush sesión anterior (si había una)
                 if (previousMediaId != null) {
                     serviceScope.launch {
                         playbackHistoryRepository.flushSession(previousPosition)
                     }
                 }
+
+                // Reiniciar tracking state para la nueva canción
+                lastTrackedPositionMs = 0L
+                maxPositionReachedMs = 0L
+                currentTrackedSongId = null
 
                 // Inicio de nueva sesión (si hay nueva canción)
                 val newMediaId = mediaItem?.mediaId?.toLongOrNull()
@@ -197,17 +233,100 @@ class PlaybackService : MediaLibraryService() {
             if (playbackState == Player.STATE_ENDED) {
                 player?.let { p ->
                     val currentPosition = p.currentPosition
+                    val duration = p.duration
                     val mediaId = p.currentMediaItem?.mediaId?.toLongOrNull()
                     if (mediaId != null) {
                         serviceScope.launch {
-                            // Flush final + completedCount +1
+                            // Flush final de playedMs
                             playbackHistoryRepository.flushSession(currentPosition)
-                            playbackHistoryRepository.recordCompleted(mediaId)
+
+                            // Solo contar como completada si se escuchó al menos
+                            // el 90% de la canción (detecta seeks al final)
+                            val completionThreshold = if (duration > 0) {
+                                (duration * COMPLETION_THRESHOLD_RATIO).toLong()
+                            } else {
+                                0L
+                            }
+                            if (maxPositionReachedMs >= completionThreshold && duration > 0) {
+                                playbackHistoryRepository.recordCompleted(mediaId)
+                            }
                         }
                     }
+
+                    // Reiniciar tracking state
+                    lastTrackedPositionMs = 0L
+                    maxPositionReachedMs = 0L
+                    currentTrackedSongId = null
                 }
             }
         }
+    }
+
+    // =========================================================================
+    // Tracking en tiempo real
+    // =========================================================================
+
+    /**
+     * Inicia el polling de tracking que cada 1 segundo acumula el
+     * tiempo escuchado en playedMs. Solo corre mientras suena música.
+     * Es idempotente: no crea un segundo job si ya hay uno activo.
+     */
+    private fun startTracking() {
+        if (trackingJob?.isActive == true) return
+        trackingJob = serviceScope.launch {
+            while (isActive) {
+                tickTracking()
+                delay(TRACKING_INTERVAL_MS)
+            }
+        }
+    }
+
+    /** Detiene el polling de tracking. */
+    private fun stopTracking() {
+        trackingJob?.cancel()
+        trackingJob = null
+    }
+
+    /**
+     * Un tick del polling: lee la posición actual del player, calcula
+     * el delta desde la última lectura y acumula playedMs en la BD.
+     *
+     * Lógica de delta:
+     * - Si el delta es <= 0 (seek hacia atrás o pausa), no se acumula.
+     * - Si el delta es > 5 segundos (seek hacia adelante), se descarta
+     *   porque no representa tiempo realmente escuchado.
+     * - Si el delta está en rango razonable (1ms a 5000ms), se acumula.
+     *
+     * También actualiza maxPositionReachedMs para la detección de
+     * reproducción completa en STATE_ENDED.
+     */
+    private suspend fun tickTracking() {
+        val p = player ?: return
+        if (!p.isPlaying) return
+
+        val currentPosition = p.currentPosition
+        val mediaId = p.currentMediaItem?.mediaId?.toLongOrNull() ?: return
+
+        // Si cambió la canción, reiniciar estado
+        if (mediaId != currentTrackedSongId) {
+            lastTrackedPositionMs = currentPosition
+            currentTrackedSongId = mediaId
+            maxPositionReachedMs = currentPosition
+            return
+        }
+
+        // Actualizar máxima posición alcanzada (para detectar seeks al final)
+        if (currentPosition > maxPositionReachedMs) {
+            maxPositionReachedMs = currentPosition
+        }
+
+        // Calcular delta y acumular si es razonable
+        val delta = currentPosition - lastTrackedPositionMs
+        if (delta in 1..MAX_REASONABLE_DELTA_MS) {
+            playbackHistoryRepository.accumulatePlayedMs(mediaId, delta)
+        }
+
+        lastTrackedPositionMs = currentPosition
     }
 
     // =========================================================================
@@ -260,9 +379,10 @@ class PlaybackService : MediaLibraryService() {
     }
 
     override fun onDestroy() {
-        // Cancelar suscripción reactiva
+        // Cancelar suscripción reactiva y tracking
         librarySubscriptionJob?.cancel()
         librarySubscriptionJob = null
+        stopTracking()
         serviceScope.cancel()
 
         if (noisyReceiverRegistered) {
@@ -326,4 +446,33 @@ class PlaybackService : MediaLibraryService() {
      * y controles externos ya funcionan con la sesión actual.
      */
     private class LibraryCallback : MediaLibrarySession.Callback
+
+    // =========================================================================
+    // Constantes
+    // =========================================================================
+
+    private companion object {
+        /** Intervalo del polling de tracking en milisegundos. */
+        const val TRACKING_INTERVAL_MS = 1000L
+
+        /**
+         * Delta máximo razonable entre dos lecturas consecutivas del
+         * polling. Si el delta es mayor, se considera un seek hacia
+         * adelante y no se acumula como tiempo escuchado.
+         *
+         * 5 segundos de margen: cubre el caso de que el polling se
+         * retrasara temporalmente (GC pause, etc.) sin falsos positivos.
+         */
+        const val MAX_REASONABLE_DELTA_MS = 5000L
+
+        /**
+         * Porcentaje mínimo de la canción que debe haberse escuchado
+         * para contar como reproducción completada (0.90 = 90%).
+         *
+         * Con esto, si un usuario hace seek al último segundo de una
+         * canción de 3 minutos, maxPositionReachedMs será bajo y no
+         * contará como completada. Si la escucha completa, sí cuenta.
+         */
+        const val COMPLETION_THRESHOLD_RATIO = 0.90
+    }
 }

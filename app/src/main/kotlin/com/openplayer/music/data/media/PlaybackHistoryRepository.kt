@@ -27,6 +27,12 @@ import kotlinx.coroutines.withContext
  * escuchado. Al pausar, seek, cambiar de canción o terminar la
  * reproducción, se calcula el delta y se acumula en playedMs.
  *
+ * ## Tracking en tiempo real
+ * [accumulatePlayedMs] permite al servicio de reproducción sumar
+ * deltas pequeños (ej. cada 1 segundo) directamente a playedMs,
+ * garantizando que el tiempo escuchado se actualice en tiempo real
+ * en la UI sin esperar a que el usuario pause o cambie de canción.
+ *
  * ## Flows reactivos
  * - [totalStats]: suma de playCount, completedCount y playedMs.
  * - [topTrack]: canción con más playCount.
@@ -64,6 +70,9 @@ class PlaybackHistoryRepository(
      * Incrementa playCount en 1 y actualiza lastPlayedAt.
      * Inicia una nueva sesión para tracking de tiempo.
      *
+     * Se llama cuando Media3 reporta una transición de MediaItem
+     * (después de que BASS creó el stream exitosamente).
+     *
      * @param songId ID de la canción (MediaStore._ID).
      * @param startPositionMs Posición de inicio en milisegundos
      *        (normalmente 0, pero puede ser > 0 si se reanuda).
@@ -75,8 +84,12 @@ class PlaybackHistoryRepository(
     }
 
     /**
-     * Registra que la canción se reprodujo completamente (STATE_ENDED).
+     * Registra que la canción se reprodujo completamente.
      * Incrementa completedCount en 1.
+     *
+     * Solo debe llamarse cuando la canción termina naturalmente
+     * (sin seek al final) y se reprodujo al menos el 90% de su duración.
+     * El servicio de reproducción es responsable de esta validación.
      *
      * @param songId ID de la canción.
      */
@@ -99,6 +112,23 @@ class PlaybackHistoryRepository(
             playStatsDao.addPlayedMs(session.songId, deltaMs)
         }
         currentSession = null
+    }
+
+    /**
+     * Acumula deltaMs de tiempo escuchado en playedMs de forma
+     * incremental. Diseñado para ser llamado periódicamente por el
+     * servicio de reproducción (ej. cada 1 segundo) para mantener
+     * las estadísticas actualizadas en tiempo real.
+     *
+     * A diferencia de [flushSession], NO reinicia la sesión y puede
+     * llamarse múltiples veces mientras la canción sigue sonando.
+     *
+     * @param songId ID de la canción en reproducción.
+     * @param deltaMs Milisegundos a acumular (delta desde la última lectura).
+     */
+    suspend fun accumulatePlayedMs(songId: Long, deltaMs: Long) {
+        if (deltaMs <= 0) return
+        playStatsDao.accumulatePlayedMs(songId, deltaMs)
     }
 
     // =========================================================================
