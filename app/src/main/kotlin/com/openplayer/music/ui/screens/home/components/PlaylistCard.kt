@@ -1,7 +1,6 @@
 package com.openplayer.music.ui.screens.home.components
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -39,7 +38,6 @@ import java.io.File
  * Card de playlist con mosaico 2x2 de carátulas + título + contador.
  *
  * @param title Nombre de la playlist.
- * @param songCount Cantidad de canciones en la playlist.
  * @param countText Texto formateado (ej. "32 canciones").
  * @param coverFiles Lista de hasta 4 archivos de carátula para el mosaico.
  * @param onClick Callback al tocar la card.
@@ -54,7 +52,6 @@ fun PlaylistCard(
 ) {
     val surfaceL1 = MaterialTheme.colorScheme.surfaceVariant
     val surfaceL2 = LocalCardL2Color.current
-    val borderL1 = MaterialTheme.colorScheme.outline
     val titleColor = LocalListItemTitleColor.current
     val subtitleColor = LocalListItemSubtitleColor.current
     val placeholderIconColor = LocalCoverPlaceholderIconColor.current
@@ -64,7 +61,6 @@ fun PlaylistCard(
             .fillMaxWidth()
             .clip(RoundedCornerShape(14.dp))
             .background(surfaceL1)
-            .border(1.dp, borderL1, RoundedCornerShape(14.dp))
             .clickable(onClick = onClick)
             .padding(10.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)

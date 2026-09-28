@@ -1,7 +1,6 @@
 package com.openplayer.music.ui.screens.home.components
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -32,8 +31,8 @@ import com.openplayer.music.ui.theme.LocalTopBarIconColor
  * Botón grande "Reproducir todo aleatoriamente" con icono shuffle
  * circular y contador de canciones de la biblioteca.
  *
- * @param songCount Cantidad total de canciones en la biblioteca.
  * @param countText Texto formateado del conteo (ej. "1.248 canciones").
+ * @param titleText Título del botón.
  * @param onClick Callback al tocar el botón.
  */
 @Composable
@@ -44,7 +43,6 @@ fun ShuffleAllButton(
     onClick: () -> Unit = {}
 ) {
     val surfaceL1 = MaterialTheme.colorScheme.surfaceVariant
-    val borderL1 = MaterialTheme.colorScheme.outline
     val surfaceL2 = LocalCardL2Color.current
     val titleColor = LocalListItemTitleColor.current
     val subtitleColor = LocalListItemSubtitleColor.current
@@ -55,7 +53,6 @@ fun ShuffleAllButton(
             .fillMaxWidth()
             .clip(RoundedCornerShape(16.dp))
             .background(surfaceL1)
-            .border(1.dp, borderL1, RoundedCornerShape(16.dp))
             .clickable(onClick = onClick)
             .padding(vertical = 14.dp, horizontal = 16.dp),
         verticalAlignment = Alignment.CenterVertically,

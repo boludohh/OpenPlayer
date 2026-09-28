@@ -1,7 +1,6 @@
 package com.openplayer.music.ui.screens.home.components
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -9,30 +8,24 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.openplayer.music.R
 import com.openplayer.music.data.db.TotalStats
-import com.openplayer.music.ui.theme.LocalCardL2Color
-import com.openplayer.music.ui.theme.LocalCoverPlaceholderIconColor
 import com.openplayer.music.ui.theme.LocalListItemSubtitleColor
 import com.openplayer.music.ui.theme.LocalListItemTitleColor
 
 /**
  * Panel de estadísticas con 3 columnas separadas por divisores verticales.
  * Muestra: reproducciones totales, completadas y tiempo de escucha.
+ * Diseño minimalista: solo valor + label, sin iconos circulares.
  *
  * @param stats Objeto [TotalStats] con los datos agregados.
  * @param formattedTime Texto ya formateado del tiempo (ej. "342 h" o "45 min").
@@ -48,29 +41,23 @@ fun StatsPanel(
 ) {
     val surfaceL1 = MaterialTheme.colorScheme.surfaceVariant
     val borderL1 = MaterialTheme.colorScheme.outline
-    val surfaceL2 = LocalCardL2Color.current
     val titleColor = LocalListItemTitleColor.current
     val subtitleColor = LocalListItemSubtitleColor.current
-    val iconColor = LocalCoverPlaceholderIconColor.current
 
     Row(
         modifier = modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(16.dp))
             .background(surfaceL1)
-            .border(1.dp, borderL1, RoundedCornerShape(16.dp))
             .padding(vertical = 16.dp, horizontal = 6.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         // Stat 1: Reproducciones totales
         StatColumn(
-            iconRes = R.drawable.ic_play_arrow,
             value = formatStatNumber(stats.totalPlays),
             label = totalPlaysLabel,
-            surfaceL2 = surfaceL2,
             titleColor = titleColor,
             subtitleColor = subtitleColor,
-            iconColor = iconColor,
             modifier = Modifier.weight(1f)
         )
 
@@ -84,13 +71,10 @@ fun StatsPanel(
 
         // Stat 2: Completadas
         StatColumn(
-            iconRes = R.drawable.ic_check,
             value = formatStatNumber(stats.totalCompleted),
             label = completedLabel,
-            surfaceL2 = surfaceL2,
             titleColor = titleColor,
             subtitleColor = subtitleColor,
-            iconColor = iconColor,
             modifier = Modifier.weight(1f)
         )
 
@@ -104,13 +88,10 @@ fun StatsPanel(
 
         // Stat 3: Tiempo
         StatColumn(
-            iconRes = R.drawable.ic_schedule,
             value = formattedTime,
             label = timeLabel,
-            surfaceL2 = surfaceL2,
             titleColor = titleColor,
             subtitleColor = subtitleColor,
-            iconColor = iconColor,
             modifier = Modifier.weight(1f)
         )
     }
@@ -118,39 +99,21 @@ fun StatsPanel(
 
 /**
  * Columna individual de estadística dentro del panel.
+ * Solo muestra el valor numérico y su label (sin icono).
  */
 @Composable
 private fun StatColumn(
-    iconRes: Int,
     value: String,
     label: String,
-    surfaceL2: androidx.compose.ui.graphics.Color,
     titleColor: androidx.compose.ui.graphics.Color,
     subtitleColor: androidx.compose.ui.graphics.Color,
-    iconColor: androidx.compose.ui.graphics.Color,
     modifier: Modifier = Modifier
 ) {
     Column(
         modifier = modifier,
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(7.dp)
+        verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {
-        // Icono circular
-        Box(
-            modifier = Modifier
-                .size(28.dp)
-                .clip(CircleShape)
-                .background(surfaceL2),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                painter = painterResource(id = iconRes),
-                contentDescription = null,
-                tint = iconColor,
-                modifier = Modifier.size(14.dp)
-            )
-        }
-
         // Valor
         Text(
             text = value,

@@ -1,7 +1,6 @@
 package com.openplayer.music.ui.screens.home.components
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -10,7 +9,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -31,20 +29,20 @@ import coil3.size.Size
 import com.openplayer.music.R
 import com.openplayer.music.ui.theme.LocalCardL2Color
 import com.openplayer.music.ui.theme.LocalCoverPlaceholderIconColor
+import com.openplayer.music.ui.theme.LocalFloatingIconColor
 import com.openplayer.music.ui.theme.LocalListItemSubtitleColor
 import com.openplayer.music.ui.theme.LocalListItemTitleColor
-import com.openplayer.music.ui.theme.LocalTopBarIconColor
 import java.io.File
 
 /**
  * Card "Seguir escuchando" — muestra la última canción reproducida
- * con carátula, título, artista, contexto y botón de play circular.
+ * con carátula, título, artista, contexto y un chevron a la derecha
+ * que indica que se puede navegar al contexto.
  *
  * @param title Título de la canción.
  * @param artist Nombre del artista.
  * @param context Texto de contexto (ej. "Reproduciendo desde Álbum").
  * @param coverFile Archivo de la carátula en disco, null si no tiene.
- * @param onPlayClick Callback al tocar el botón play.
  * @param onCardClick Callback al tocar la card (navegar al contexto).
  */
 @Composable
@@ -54,24 +52,20 @@ fun ResumeCard(
     context: String,
     coverFile: File?,
     modifier: Modifier = Modifier,
-    onPlayClick: () -> Unit = {},
     onCardClick: () -> Unit = {}
 ) {
     val surfaceL1 = MaterialTheme.colorScheme.surfaceVariant
-    val borderL1 = MaterialTheme.colorScheme.outline
     val surfaceL2 = LocalCardL2Color.current
-    val borderL2 = MaterialTheme.colorScheme.outlineVariant
     val titleColor = LocalListItemTitleColor.current
     val subtitleColor = LocalListItemSubtitleColor.current
     val placeholderIconColor = LocalCoverPlaceholderIconColor.current
-    val functionalIconColor = LocalTopBarIconColor.current
+    val chevronColor = LocalFloatingIconColor.current
 
     Row(
         modifier = modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(18.dp))
             .background(surfaceL1)
-            .border(1.dp, borderL1, RoundedCornerShape(18.dp))
             .clickable(onClick = onCardClick)
             .padding(10.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -138,22 +132,12 @@ fun ResumeCard(
             )
         }
 
-        // Botón play circular
-        Box(
-            modifier = Modifier
-                .size(42.dp)
-                .clip(CircleShape)
-                .background(surfaceL2)
-                .border(1.dp, borderL2, CircleShape)
-                .clickable(onClick = onPlayClick),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                painter = painterResource(id = R.drawable.ic_play_arrow),
-                contentDescription = null,
-                tint = functionalIconColor,
-                modifier = Modifier.size(18.dp)
-            )
-        }
+        // Chevron indicador de navegación
+        Icon(
+            painter = painterResource(id = R.drawable.ic_chevron_right),
+            contentDescription = null,
+            tint = chevronColor,
+            modifier = Modifier.size(20.dp)
+        )
     }
 }

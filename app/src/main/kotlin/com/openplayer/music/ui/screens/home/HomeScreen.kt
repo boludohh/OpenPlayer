@@ -297,7 +297,6 @@ private fun ResumeSection(
             artist = song.artist,
             context = stringResource(R.string.home_resume_playing_from),
             coverFile = coverRepository.coverFile(song.path),
-            onPlayClick = { /* TODO: reproducir */ },
             onCardClick = { /* TODO: navegar */ }
         )
     }
