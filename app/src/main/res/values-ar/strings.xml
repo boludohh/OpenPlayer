@@ -65,6 +65,7 @@
     <string name="search_empty_query">اكتب للبحث في مكتبتك</string>
     <string name="album_year_tracks">%1$d · %2$d مقطوعات</string>
     <string name="album_tracks_count">%1$d مقطوعات</string>
+    <string name="album_badge_new">جديد</string>
     <string name="artist_images_attribution">صور الفنانين بواسطة Deezer. المحتوى للاستخدام الخاص والعائلي.</string>
     <string name="home_resume_section">متابعة الاستماع</string>
     <string name="home_resume_playing_from">يتم التشغيل من</string>

@@ -65,6 +65,7 @@
     <string name="search_empty_query">Type to search your library</string>
     <string name="album_year_tracks">%1$d · %2$d tracks</string>
     <string name="album_tracks_count">%1$d tracks</string>
+    <string name="album_badge_new">New</string>
     <string name="artist_images_attribution">Artist images by Deezer. Content for private and family use.</string>
     <string name="home_resume_section">Continue listening</string>
     <string name="home_resume_playing_from">Playing from</string>

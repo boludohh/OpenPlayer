@@ -1,0 +1,21 @@
+<resources>
+    <!-- Variante oscura del tema base para SplashActivity y MainActivity.
+         Hereda de Theme.Material.NoActionBar (la versión oscura del tema
+         Material base), garantizando que los recursos del sistema y los
+         atributos por defecto usen la paleta oscura. -->
+    <style name="Theme.ComposeEmptyActivity" parent="android:Theme.Material.NoActionBar">
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+    </style>
+
+    <!-- Variante oscura del tema de splash.
+         windowBackground #1C1B1F coincide exactamente con DarkBackground
+         según el documento de colores de OpenPlayer (fondo principal del
+         tema Oscuro). Los usuarios en tema AMOLED verán un flash casi
+         imperceptible de #1C1B1F (~200ms) antes de que Compose pinte
+         #000000, priorizando la coherencia del tema Dark sobre el ahorro
+         de píxeles del AMOLED en el breve instante del splash. -->
+    <style name="Theme.Splash" parent="Theme.ComposeEmptyActivity">
+        <item name="android:windowBackground">#FF1C1B1F</item>
+    </style>
+</resources>

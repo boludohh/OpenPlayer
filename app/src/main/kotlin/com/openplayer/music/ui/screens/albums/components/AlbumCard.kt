@@ -1,15 +1,17 @@
 package com.openplayer.music.ui.screens.albums.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -20,52 +22,56 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
 import coil3.size.Size
 import com.openplayer.music.R
+import com.openplayer.music.ui.theme.LocalCardL2Color
 import com.openplayer.music.ui.theme.LocalCoverPlaceholderIconColor
 import com.openplayer.music.ui.theme.LocalListItemMetaColor
 import com.openplayer.music.ui.theme.LocalListItemSubtitleColor
 import com.openplayer.music.ui.theme.LocalListItemTitleColor
 import java.io.File
 
-/** Ancho y alto de la carátula del álbum en dp. */
-private val AlbumCoverSize = 160.dp
+/** Esquinas de la tarjeta completa. */
+private val CardCornerSize = 20.dp
 
-/** Altura del bloque de metadata debajo de la carátula. */
-private val MetadataHeight = 44.dp
+/** Esquinas de la portada. */
+private val CoverCornerSize = 14.dp
 
-/** Esquinas de la carátula del álbum. */
-private val CoverCornerSize = 8.dp
+/** Esquinas del badge. */
+private val BadgeCornerSize = 999.dp
+
+/** Padding interno de la tarjeta. */
+private val CardPadding = 10.dp
+
+/** Separación entre portada e info. */
+private val CoverToInfoSpacing = 12.dp
 
 /**
  * Tarjeta individual de un álbum en el grid de la pestaña de Álbumes.
- *
- * Renderiza una tarjeta cuadrada con la carátula del álbum arriba y
- * metadata (título, artista, año + conteo de pistas) abajo. La
- * geometría es similar a [com.openplayer.music.ui.screens.artists.components.ArtistCircle]
- * pero rectangular en lugar de circular, manteniendo coherencia visual
- * entre pestañas.
+ * Diseño basado en el mockup oficial de OpenPlayer.
  *
  * ## Composición visual
- * - **Carátula** (arriba, 160×160dp, esquinas 8dp): cargada vía Coil
- *   desde el archivo de portada de la canción representativa del
- *   álbum. Si no hay carátula, se muestra un placeholder con fondo
- *   `surfaceVariant` y el icono [R.drawable.ic_nav_music_filled]
- *   centrado (60dp).
- * - **Título del álbum** (debajo de la carátula): [MaterialTheme.typography.bodyMedium],
- *   color [LocalListItemTitleColor], máximo 1 línea con ellipsis.
- * - **Artista**: [MaterialTheme.typography.bodySmall], color
- *   [LocalListItemSubtitleColor], máximo 1 línea con ellipsis.
- * - **Año + conteo de pistas**: [MaterialTheme.typography.labelSmall],
- *   color [LocalListItemMetaColor], formato "2023 · 12 pistas".
+ * - **Contenedor**: fondo `surfaceVariant` (cardL1), borde de 1dp con
+ *   `outline` (borderL1), esquinas de 20dp, padding interno de 10dp.
+ * - **Portada** (arriba, aspect-ratio 1:1, esquinas 14dp): cargada vía
+ *   Coil desde el archivo de portada. Si no hay carátula, se muestra
+ *   un placeholder con fondo `cardL2` y el icono `ic_nav_albums_filled`.
+ * - **Badge "Nuevo"** (esquina superior izquierda de la portada):
+ *   píldora con fondo `cardL2`, borde `borderL2`, texto secondary.
+ *   Solo se muestra si [isNew] es true.
+ * - **Título del álbum**: 15sp, bold, color highContrast, 1 línea con ellipsis.
+ * - **Artista**: 13sp, medium, color secondaryOnBg, 1 línea con ellipsis.
+ * - **Meta**: 12sp, año • conteo pistas, color secondaryOnBg.
  *
  * ## Sin ripple de Material
  * El efecto de onda (ripple) al tocar está deshabilitado usando
@@ -73,20 +79,19 @@ private val CoverCornerSize = 8.dp
  * siendo funcional pero sin feedback visual de toque.
  *
  * ## Optimización de memoria de carátulas
- * La carátula se carga vía [ImageRequest] con tamaño fijo de 160dp
- * (convertido a píxeles según densidad de pantalla). Coil hace
- * downsampling durante el decode (inSampleSize) en vez de cargar la
- * imagen completa y escalarla, reduciendo drásticamente el pico de
- * memoria al scrollear grids largos.
+ * La carátula se carga vía [ImageRequest] con tamaño fijo calculado
+ * según densidad. Coil hace downsampling durante el decode (inSampleSize)
+ * en vez de cargar la imagen completa, reduciendo el pico de memoria
+ * al scrollear grids largos.
  *
  * @param title Título del álbum.
  * @param artist Artista del álbum.
  * @param year Año de lanzamiento (null si no está en metadatos).
  * @param trackCount Cantidad de pistas en el álbum.
+ * @param isNew Si el álbum fue agregado en los últimos 30 días.
  * @param coverFile Archivo de portada en disco (null si el álbum no
  *                  tiene carátula disponible).
- * @param onClick Callback invocado al tocar la tarjeta. Preparado
- *                para navegación futura al detalle del álbum.
+ * @param onClick Callback invocado al tocar la tarjeta.
  * @param modifier Modificador externo que aplica el padre (grid).
  */
 @Composable
@@ -95,6 +100,7 @@ fun AlbumCard(
     artist: String,
     year: Int?,
     trackCount: Int,
+    isNew: Boolean,
     coverFile: File?,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
@@ -102,45 +108,54 @@ fun AlbumCard(
     val titleColor = LocalListItemTitleColor.current
     val subtitleColor = LocalListItemSubtitleColor.current
     val metaColor = LocalListItemMetaColor.current
-    val placeholderBg = MaterialTheme.colorScheme.surfaceVariant
+    val placeholderBg = LocalCardL2Color.current
     val placeholderIconColor = LocalCoverPlaceholderIconColor.current
+    val surfaceL1 = MaterialTheme.colorScheme.surfaceVariant
+    val borderL1 = MaterialTheme.colorScheme.outline
+    val borderL2 = MaterialTheme.colorScheme.outlineVariant
     val density = LocalDensity.current
 
     // InteractionSource propio para deshabilitar el ripple de Material
     val interactionSource = remember { MutableInteractionSource() }
 
-    // Tamaño del thumbnail de la carátula en píxeles para Coil
-    val thumbnailPx = (AlbumCoverSize.value * density.density).toInt()
-
     Column(
         horizontalAlignment = Alignment.Start,
         modifier = modifier
             .fillMaxWidth()
+            .clip(RoundedCornerShape(CardCornerSize))
+            .background(surfaceL1)
+            .border(1.dp, borderL1, RoundedCornerShape(CardCornerSize))
             .clickable(
                 interactionSource = interactionSource,
                 indication = null,
                 onClick = onClick
             )
+            .padding(CardPadding)
     ) {
-        // Carátula del álbum (o placeholder si no hay portada)
+        // Portada del álbum con aspect-ratio 1:1
         Box(
             modifier = Modifier
-                .size(AlbumCoverSize)
+                .fillMaxWidth()
+                .aspectRatio(1f)
                 .clip(RoundedCornerShape(CoverCornerSize))
                 .background(placeholderBg),
             contentAlignment = Alignment.Center
         ) {
             // Icono placeholder (siempre dibujado debajo)
             Icon(
-                painter = painterResource(id = R.drawable.ic_nav_music_filled),
+                painter = painterResource(id = R.drawable.ic_nav_albums_filled),
                 contentDescription = null,
                 tint = placeholderIconColor,
-                modifier = Modifier.size(60.dp)
+                modifier = Modifier.fillMaxWidth(0.35f)
             )
 
             // Carátula encima del placeholder (solo si existe)
             if (coverFile != null) {
-                val request = ImageRequest.Builder(androidx.compose.ui.platform.LocalContext.current)
+                // Tamaño en píxeles para downsampling de Coil
+                // Calculamos el tamaño aproximado basado en densidad
+                // (ancho de pantalla típico ~360dp / 2 columnas - gaps = ~170dp)
+                val thumbnailPx = (170 * density.density).toInt()
+                val request = ImageRequest.Builder(LocalContext.current)
                     .data(coverFile)
                     .size(Size(thumbnailPx, thumbnailPx))
                     .build()
@@ -148,37 +163,69 @@ fun AlbumCard(
                     model = request,
                     contentDescription = title,
                     contentScale = ContentScale.Crop,
-                    modifier = Modifier.size(AlbumCoverSize)
+                    modifier = Modifier.fillMaxWidth()
                 )
+            }
+
+            // Badge "Nuevo" (esquina superior izquierda)
+            if (isNew) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .padding(10.dp)
+                        .clip(RoundedCornerShape(BadgeCornerSize))
+                        .background(placeholderBg.copy(alpha = 0.85f))
+                        .border(1.dp, borderL2, RoundedCornerShape(BadgeCornerSize))
+                        .padding(horizontal = 8.dp, vertical = 5.dp)
+                ) {
+                    Text(
+                        text = stringResource(R.string.album_badge_new),
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            fontSize = 10.5.sp,
+                            letterSpacing = 0.08.sp
+                        ),
+                        color = subtitleColor,
+                        textAlign = TextAlign.Center
+                    )
+                }
             }
         }
 
-        Spacer(modifier = Modifier.height(6.dp))
+        Spacer(modifier = Modifier.height(CoverToInfoSpacing))
 
-        // Metadata: título, artista, año + conteo
+        // Información del álbum
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(MetadataHeight)
                 .padding(horizontal = 4.dp)
         ) {
             Text(
                 text = title,
-                style = MaterialTheme.typography.bodyMedium,
+                style = MaterialTheme.typography.bodyMedium.copy(
+                    fontSize = 15.sp,
+                    letterSpacing = (-0.02).sp
+                ),
                 color = titleColor,
+                fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.fillMaxWidth()
             )
 
+            Spacer(modifier = Modifier.height(4.dp))
+
             Text(
                 text = artist,
-                style = MaterialTheme.typography.bodySmall,
+                style = MaterialTheme.typography.bodySmall.copy(
+                    fontSize = 13.sp
+                ),
                 color = subtitleColor,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.fillMaxWidth()
             )
+
+            Spacer(modifier = Modifier.height(10.dp))
 
             Text(
                 text = if (year != null) {
@@ -186,7 +233,10 @@ fun AlbumCard(
                 } else {
                     stringResource(R.string.album_tracks_count, trackCount)
                 },
-                style = MaterialTheme.typography.labelSmall,
+                style = MaterialTheme.typography.labelSmall.copy(
+                    fontSize = 12.sp,
+                    letterSpacing = 0.01.sp
+                ),
                 color = metaColor,
                 maxLines = 1,
                 textAlign = TextAlign.Start,

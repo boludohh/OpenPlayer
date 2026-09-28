@@ -39,6 +39,7 @@ import com.openplayer.music.ui.screens.albums.components.AlbumCard
 import com.openplayer.music.ui.theme.LocalScreenTitleColor
 import com.openplayer.music.ui.theme.LocalTracksCountTextColor
 import com.openplayer.music.ui.theme.screenTitle
+import kotlin.time.Duration.Companion.days
 
 /**
  * Altura del desvanecido superior en dp.
@@ -58,13 +59,21 @@ private val TopFadeHeight = 64.dp
 private val ScrollFadeThreshold = 48.dp
 
 /**
+ * Duración (en días) para considerar un álbum como "Nuevo".
+ * Álbumes agregados a la biblioteca dentro de este período muestran
+ * el badge "Nuevo" en la esquina superior izquierda de la portada.
+ */
+private val NEW_ALBUM_THRESHOLD_DAYS = 30.days
+
+/**
  * Pantalla de álbumes de OpenPlayer.
  *
  * Muestra un grid de 2 columnas con tarjetas de álbumes agrupados por
  * `(album, albumArtist)` para desambiguar álbumes homónimos de
  * distintos artistas. Cada tarjeta muestra la carátula del álbum,
- * título, artista y metadata (año + conteo de pistas). El header
- * (título + conteo) forma parte del scroll junto con las tarjetas.
+ * título, artista, metadata (año + conteo de pistas) y opcionalmente
+ * un badge "Nuevo" si el álbum fue agregado en los últimos 30 días.
+ * El header (título + conteo) forma parte del scroll junto con las tarjetas.
  *
  * **Agrupación en memoria**: no requiere cambios en Room/DAO; se
  * deriva del Flow de canciones de [AudioRepository] mediante
@@ -77,14 +86,12 @@ private val ScrollFadeThreshold = 48.dp
  * Si ninguna canción del grupo tiene carátula, la tarjeta muestra un
  * placeholder.
  *
- * **Efecto fade superior condicional**: idéntico al de TracksScreen,
- * ArtistsScreen y PlaylistScreen; solo se dibuja cuando hay scroll
- * activo.
+ * **Efecto fade superior condicional**: solo se dibuja cuando hay scroll
+ * activo, ocultando el corte duro del viewport.
  *
- * **Geometría óptica idéntica a las otras pestañas**: los paddings
- * del header (start=24dp, top=8dp, end=15dp) y las separaciones
- * (8dp título/conteo, 24dp conteo/primer álbum) coinciden con las
- * otras pestañas, garantizando alineación visual consistente.
+ * **Geometría basada en el mockup oficial**: paddings horizontales de
+ * 18dp, gaps de 14dp entre cards. El header forma parte del scroll con
+ * padding start=12dp, top=8dp, end=3dp, bottom=24dp.
  *
  * @param audioRepository Repositorio de audio para obtener la lista de canciones.
  * @param modifier Modificador de Compose opcional.
@@ -160,9 +167,9 @@ fun AlbumsScreen(
                         )
                     }
                 },
-            contentPadding = PaddingValues(horizontal = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
+            contentPadding = PaddingValues(horizontal = 18.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+            horizontalArrangement = Arrangement.spacedBy(14.dp)
         ) {
             item(
                 key = "albums_header",
@@ -200,6 +207,7 @@ fun AlbumsScreen(
                     artist = album.artist,
                     year = album.year,
                     trackCount = album.trackCount,
+                    isNew = album.isNew,
                     coverFile = coverFile,
                     onClick = { /* TODO: navegar a detalle del álbum */ }
                 )
@@ -222,9 +230,15 @@ fun AlbumsScreen(
  * Para cada grupo, se busca la primera canción que tenga carátula en
  * disco (verificando que el campo `path` no esté vacío). Si ninguna
  * canción del grupo tiene carátula, [Album.coverPath] es `null`.
+ *
+ * ## Badge "Nuevo"
+ * [Album.isNew] es `true` si la canción más reciente del grupo fue
+ * agregada en los últimos 30 días (basado en `Song.dateAdded`).
  */
 private fun groupSongsByAlbum(songs: List<Song>): List<Album> {
     if (songs.isEmpty()) return emptyList()
+
+    val newThresholdMs = System.currentTimeMillis() - NEW_ALBUM_THRESHOLD_DAYS.inWholeMilliseconds
 
     // Agrupar por clave (album, albumArtist)
     val grouped = songs.groupBy { song ->
@@ -260,6 +274,10 @@ private fun groupSongsByAlbum(songs: List<Song>): List<Album> {
         val coverPath = groupSongs
             .filter { it.path.isNotBlank() }
             .firstOrNull()?.path
+
+        // Badge "Nuevo": maxDateAdded del grupo > threshold de 30 días
+        val maxDateAdded = groupSongs.maxOfOrNull { it.dateAdded } ?: 0L
+        val isNew = maxDateAdded > newThresholdMs
         
         Album(
             key = key,
@@ -267,7 +285,8 @@ private fun groupSongsByAlbum(songs: List<Song>): List<Album> {
             artist = artist,
             year = year,
             trackCount = groupSongs.size,
-            coverPath = coverPath
+            coverPath = coverPath,
+            isNew = isNew
         )
     }.sortedBy { it.title.lowercase() }
 }

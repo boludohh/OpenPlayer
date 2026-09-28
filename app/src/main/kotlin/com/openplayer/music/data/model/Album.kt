@@ -18,6 +18,11 @@ package com.openplayer.music.data.model
  * ninguna canción del álbum tiene carátula, [coverPath] es `null` y
  * la UI muestra un placeholder.
  *
+ * ## Badge "Nuevo"
+ * [isNew] es `true` cuando el álbum fue agregado a la biblioteca en
+ * los últimos 30 días (basado en el `dateAdded` máximo del grupo).
+ * Se calcula en la agrupación para evitar recalcular en cada recomposición.
+ *
  * ## Campos
  * - [key]: identificador único del álbum (para `key` en LazyGrid).
  * - [title]: nombre del álbum (o nombre del artista si no hay campo
@@ -29,6 +34,7 @@ package com.openplayer.music.data.model
  * - [trackCount]: cantidad de pistas en el álbum.
  * - [coverPath]: path de la canción representativa para obtener la
  *   carátula; `null` si el álbum no tiene carátula disponible.
+ * - [isNew]: `true` si el álbum se agregó en los últimos 30 días.
  */
 data class Album(
     val key: String,
@@ -36,5 +42,6 @@ data class Album(
     val artist: String,
     val year: Int?,
     val trackCount: Int,
-    val coverPath: String?
+    val coverPath: String?,
+    val isNew: Boolean = false
 )

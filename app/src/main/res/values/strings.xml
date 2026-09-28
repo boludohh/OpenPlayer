@@ -65,6 +65,7 @@
     <string name="search_empty_query">Escribe para buscar en tu biblioteca</string>
     <string name="album_year_tracks">%1$d · %2$d pistas</string>
     <string name="album_tracks_count">%1$d pistas</string>
+    <string name="album_badge_new">Nuevo</string>
     <string name="artist_images_attribution">Imágenes de artistas por Deezer. Contenido para uso privado y familiar.</string>
     <string name="home_resume_section">Seguir escuchando</string>
     <string name="home_resume_playing_from">Reproduciendo desde</string>

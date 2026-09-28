@@ -1,0 +1,13 @@
+# Keystore
+*.jks
+
+# Propiedades del keystore
+app/keystore.properties
+
+# Propiedades locales (claves de API, NUNCA versionar)
+local.properties
+
+# Archivos de sistema / IDE
+.DS_Store
+*.iml
+.idea/
