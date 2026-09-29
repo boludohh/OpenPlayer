@@ -57,6 +57,13 @@ private val CardPadding = 10.dp
 private val CoverToInfoSpacing = 12.dp
 
 /**
+ * Fracción del ancho de la portada que ocupa el icono placeholder.
+ * Valor original 0.35f aumentado un 50% para mejor presencia visual
+ * (0.35 * 1.5 = 0.525).
+ */
+private val PlaceholderIconFillFraction = 0.525f
+
+/**
  * Tarjeta individual de un álbum en el grid de la pestaña de Álbumes.
  * Diseño basado en el mockup oficial de OpenPlayer.
  *
@@ -146,7 +153,7 @@ fun AlbumCard(
                 painter = painterResource(id = R.drawable.ic_nav_albums_filled),
                 contentDescription = null,
                 tint = placeholderIconColor,
-                modifier = Modifier.fillMaxWidth(0.35f)
+                modifier = Modifier.fillMaxWidth(PlaceholderIconFillFraction)
             )
 
             // Carátula encima del placeholder (solo si existe)

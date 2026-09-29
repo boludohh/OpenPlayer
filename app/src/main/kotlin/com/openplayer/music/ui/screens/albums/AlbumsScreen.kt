@@ -73,6 +73,14 @@ private val ScrollFadeThreshold = 48.dp
 private val NEW_ALBUM_THRESHOLD_DAYS = 30.days
 
 /**
+ * Padding inferior del grid de álbumes. Garantiza que al hacer scroll
+ * al final, la última fila de cards tenga al menos esta separación
+ * respecto a la barra de navegación inferior, evitando que las cards
+ * queden dibujadas al filo del panel.
+ */
+private val GridBottomPadding = 8.dp
+
+/**
  * Pantalla de álbumes de OpenPlayer.
  *
  * Gestiona internamente la navegación entre dos estados:
@@ -204,7 +212,11 @@ private fun AlbumsListContent(
                         )
                     }
                 },
-            contentPadding = PaddingValues(horizontal = 18.dp),
+            contentPadding = PaddingValues(
+                start = 18.dp,
+                end = 18.dp,
+                bottom = GridBottomPadding
+            ),
             verticalArrangement = Arrangement.spacedBy(14.dp),
             horizontalArrangement = Arrangement.spacedBy(14.dp)
         ) {
