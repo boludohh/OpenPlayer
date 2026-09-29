@@ -78,4 +78,12 @@
     <string name="home_albums">الألبومات</string>
     <string name="home_songs_count">%1$d أغاني</string>
     <string name="home_see_all">عرض الكل</string>
+    <string name="album_detail_breadcrumb">ألبوم</string>
+    <string name="album_detail_tracks_header">الأغاني</string>
+    <string name="album_detail_play">تشغيل</string>
+    <string name="album_detail_cd_shuffle">تشغيل عشوائي</string>
+    <string name="album_detail_cd_back">رجوع</string>
+    <string name="album_detail_total_duration_hours_minutes">%1$d س %2$d د</string>
+    <string name="album_detail_total_duration_minutes">%1$d د</string>
+    <string name="album_detail_tracks_count_format">%1$d مقطوعات</string>
 </resources>

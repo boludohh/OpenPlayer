@@ -1,5 +1,10 @@
 package com.openplayer.music.ui.screens.albums
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -18,7 +23,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
@@ -68,30 +75,23 @@ private val NEW_ALBUM_THRESHOLD_DAYS = 30.days
 /**
  * Pantalla de álbumes de OpenPlayer.
  *
- * Muestra un grid de 2 columnas con tarjetas de álbumes agrupados por
- * `(album, albumArtist)` para desambiguar álbumes homónimos de
- * distintos artistas. Cada tarjeta muestra la carátula del álbum,
- * título, artista, metadata (año + conteo de pistas) y opcionalmente
- * un badge "Nuevo" si el álbum fue agregado en los últimos 30 días.
- * El header (título + conteo) forma parte del scroll junto con las tarjetas.
+ * Gestiona internamente la navegación entre dos estados:
+ * - **Lista de álbumes** (default): grid de 2 columnas con todas las
+ *   tarjetas.
+ * - **Detalle de álbum**: pantalla completa con hero + lista de pistas.
  *
- * **Agrupación en memoria**: no requiere cambios en Room/DAO; se
- * deriva del Flow de canciones de [AudioRepository] mediante
- * `groupBy` con clave `"${album}|${albumArtist}"`. Para canciones
- * sin campo `album`, se agrupa por `artist` como fallback (canciones
- * sueltas aparecen como "álbum" con el nombre del artista).
+ * La transición entre ambos estados usa `AnimatedContent` con fade
+ * de 300ms, igual que la transición entre pestañas de MainScreen.
  *
- * **Carátula del álbum**: para cada grupo, se busca la primera
- * canción que tenga carátula en disco (vía [com.openplayer.music.data.media.CoverRepository.coverFile]).
- * Si ninguna canción del grupo tiene carátula, la tarjeta muestra un
- * placeholder.
+ * ## Flujo de navegación
+ * 1. Usuario toca un AlbumCard → `selectedAlbum` se establece.
+ * 2. AnimatedContent muestra AlbumDetailScreen con fade in.
+ * 3. Usuario toca "Volver" → `selectedAlbum` vuelve a null.
+ * 4. AnimatedContent muestra la lista con fade in.
  *
- * **Efecto fade superior condicional**: solo se dibuja cuando hay scroll
- * activo, ocultando el corte duro del viewport.
- *
- * **Geometría basada en el mockup oficial**: paddings horizontales de
- * 18dp, gaps de 14dp entre cards. El header forma parte del scroll con
- * padding start=12dp, top=8dp, end=3dp, bottom=24dp.
+ * El estado de scroll de la lista se preserva gracias a que el
+ * `LazyVerticalGrid` se mantiene vivo en memoria (no se destruye
+ * al navegar al detalle, solo se oculta bajo AnimatedContent).
  *
  * @param audioRepository Repositorio de audio para obtener la lista de canciones.
  * @param modifier Modificador de Compose opcional.
@@ -101,15 +101,57 @@ fun AlbumsScreen(
     audioRepository: AudioRepository,
     modifier: Modifier = Modifier
 ) {
-    val context = LocalContext.current
     val songs by audioRepository.songs.collectAsState(initial = emptyList())
+
+    // Estado de navegación interna: null = lista, Album = detalle
+    var selectedAlbum by remember { mutableStateOf<Album?>(null) }
+
+    // Agrupar canciones por álbum y ordenar alfabéticamente
+    val albums = remember(songs) {
+        groupSongsByAlbum(songs)
+    }
+
+    AnimatedContent(
+        targetState = selectedAlbum,
+        transitionSpec = {
+            fadeIn(animationSpec = tween(300)) togetherWith
+                    fadeOut(animationSpec = tween(300))
+        },
+        label = "albumsNavigation",
+        modifier = modifier.fillMaxSize()
+    ) { album ->
+        if (album == null) {
+            AlbumsListContent(
+                albums = albums,
+                audioRepository = audioRepository,
+                onAlbumClick = { selectedAlbum = it }
+            )
+        } else {
+            AlbumDetailScreen(
+                album = album,
+                audioRepository = audioRepository,
+                onBack = { selectedAlbum = null }
+            )
+        }
+    }
+}
+
+/**
+ * Contenido de la lista de álbumes: header + grid de 2 columnas.
+ */
+@Composable
+private fun AlbumsListContent(
+    albums: List<Album>,
+    audioRepository: AudioRepository,
+    onAlbumClick: (Album) -> Unit
+) {
+    val context = LocalContext.current
     val screenTitleColor = LocalScreenTitleColor.current
     val tracksCountTextColor = LocalTracksCountTextColor.current
     val backgroundColor = MaterialTheme.colorScheme.background
     val gridState = rememberLazyGridState()
     val density = LocalDensity.current
 
-    // Singleton de CoverRepository desde la Application
     val coverRepository = remember {
         (context.applicationContext as OpenPlayerApplication).coverRepository
     }
@@ -134,13 +176,8 @@ fun AlbumsScreen(
         }
     }
 
-    // Agrupar canciones por álbum y ordenar alfabéticamente
-    val albums = remember(songs) {
-        groupSongsByAlbum(songs)
-    }
-
     Column(
-        modifier = modifier
+        modifier = Modifier
             .fillMaxSize()
             .background(backgroundColor)
     ) {
@@ -209,7 +246,7 @@ fun AlbumsScreen(
                     trackCount = album.trackCount,
                     isNew = album.isNew,
                     coverFile = coverFile,
-                    onClick = { /* TODO: navegar a detalle del álbum */ }
+                    onClick = { onAlbumClick(album) }
                 )
             }
         }
@@ -246,7 +283,7 @@ private fun groupSongsByAlbum(songs: List<Song>): List<Album> {
         val artistName = song.albumArtist?.takeIf { it.isNotBlank() }
             ?: song.artist.takeIf { it.isNotBlank() }
             ?: "Unknown Artist"
-        
+
         if (albumName != null) {
             "$albumName|$artistName"
         } else {
@@ -258,18 +295,18 @@ private fun groupSongsByAlbum(songs: List<Song>): List<Album> {
     // Convertir cada grupo a Album
     return grouped.map { (key, groupSongs) ->
         val firstSong = groupSongs.first()
-        
+
         // Título del álbum (o nombre del artista si no hay álbum)
         val title = firstSong.album?.takeIf { it.isNotBlank() }
             ?: firstSong.artist
-        
+
         // Artista del álbum (albumArtist preferido, fallback a artist)
         val artist = firstSong.albumArtist?.takeIf { it.isNotBlank() }
             ?: firstSong.artist
-        
+
         // Año (primer valor no-null encontrado en el grupo)
         val year = groupSongs.firstNotNullOfOrNull { it.year }
-        
+
         // Carátula del álbum (path de la primera canción con carátula)
         val coverPath = groupSongs
             .filter { it.path.isNotBlank() }
@@ -278,7 +315,7 @@ private fun groupSongsByAlbum(songs: List<Song>): List<Album> {
         // Badge "Nuevo": maxDateAdded del grupo > threshold de 30 días
         val maxDateAdded = groupSongs.maxOfOrNull { it.dateAdded } ?: 0L
         val isNew = maxDateAdded > newThresholdMs
-        
+
         Album(
             key = key,
             title = title,

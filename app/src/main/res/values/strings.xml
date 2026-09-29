@@ -78,4 +78,12 @@
     <string name="home_albums">Álbumes</string>
     <string name="home_songs_count">%1$d canciones</string>
     <string name="home_see_all">Ver todo</string>
+    <string name="album_detail_breadcrumb">ÁLBUM</string>
+    <string name="album_detail_tracks_header">Canciones</string>
+    <string name="album_detail_play">Reproducir</string>
+    <string name="album_detail_cd_shuffle">Reproducción aleatoria</string>
+    <string name="album_detail_cd_back">Volver</string>
+    <string name="album_detail_total_duration_hours_minutes">%1$d h %2$d min</string>
+    <string name="album_detail_total_duration_minutes">%1$d min</string>
+    <string name="album_detail_tracks_count_format">%1$d pistas</string>
 </resources>

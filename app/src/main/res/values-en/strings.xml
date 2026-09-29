@@ -78,4 +78,12 @@
     <string name="home_albums">Albums</string>
     <string name="home_songs_count">%1$d songs</string>
     <string name="home_see_all">See all</string>
+    <string name="album_detail_breadcrumb">ALBUM</string>
+    <string name="album_detail_tracks_header">Tracks</string>
+    <string name="album_detail_play">Play</string>
+    <string name="album_detail_cd_shuffle">Shuffle</string>
+    <string name="album_detail_cd_back">Back</string>
+    <string name="album_detail_total_duration_hours_minutes">%1$d h %2$d min</string>
+    <string name="album_detail_total_duration_minutes">%1$d min</string>
+    <string name="album_detail_tracks_count_format">%1$d tracks</string>
 </resources>
