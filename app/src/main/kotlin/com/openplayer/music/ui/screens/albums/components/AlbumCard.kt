@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -57,11 +58,10 @@ private val CardPadding = 10.dp
 private val CoverToInfoSpacing = 12.dp
 
 /**
- * Fracción del ancho de la portada que ocupa el icono placeholder.
- * Valor original 0.35f aumentado un 50% para mejor presencia visual
- * (0.35 * 1.5 = 0.525).
+ * Tamaño fijo del icono placeholder en el centro de la portada.
+ * Medida absoluta en dp para garantizar consistencia en todos los dispositivos.
  */
-private val PlaceholderIconFillFraction = 0.525f
+private val PlaceholderIconSize = 100.dp
 
 /**
  * Tarjeta individual de un álbum en el grid de la pestaña de Álbumes.
@@ -72,7 +72,9 @@ private val PlaceholderIconFillFraction = 0.525f
  *   `outline` (borderL1), esquinas de 20dp, padding interno de 10dp.
  * - **Portada** (arriba, aspect-ratio 1:1, esquinas 14dp): cargada vía
  *   Coil desde el archivo de portada. Si no hay carátula, se muestra
- *   un placeholder con fondo `cardL2` y el icono `ic_nav_albums_filled`.
+ *   un placeholder con fondo `cardL2`, borde `borderL2` (#2A2A2A) para
+ *   evitar confusión con portadas negras, y el icono `ic_nav_albums_filled`
+ *   de 100dp centrado.
  * - **Badge "Nuevo"** (esquina superior izquierda de la portada):
  *   píldora con fondo `cardL2`, borde `borderL2`, texto secondary.
  *   Solo se muestra si [isNew] es true.
@@ -145,7 +147,8 @@ fun AlbumCard(
                 .fillMaxWidth()
                 .aspectRatio(1f)
                 .clip(RoundedCornerShape(CoverCornerSize))
-                .background(placeholderBg),
+                .background(placeholderBg)
+                .border(1.dp, borderL2, RoundedCornerShape(CoverCornerSize)),
             contentAlignment = Alignment.Center
         ) {
             // Icono placeholder (siempre dibujado debajo)
@@ -153,7 +156,7 @@ fun AlbumCard(
                 painter = painterResource(id = R.drawable.ic_nav_albums_filled),
                 contentDescription = null,
                 tint = placeholderIconColor,
-                modifier = Modifier.fillMaxWidth(PlaceholderIconFillFraction)
+                modifier = Modifier.size(PlaceholderIconSize)
             )
 
             // Carátula encima del placeholder (solo si existe)
